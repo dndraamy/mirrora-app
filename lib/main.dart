@@ -1,18 +1,14 @@
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
 import 'package:local_auth/local_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import 'screens/biometric_login_screen.dart';
-
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'screens/main_navigation.dart';
-
 import 'theme/mirrora_theme.dart';
-
-import 'package:hive_flutter/hive_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +26,10 @@ Future<void> main() async {
 
 final SupabaseClient supabase = Supabase.instance.client;
 
+// ============================================================
+// APP
+// ============================================================
+
 class MirroraApp extends StatelessWidget {
   const MirroraApp({super.key});
 
@@ -37,21 +37,18 @@ class MirroraApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Mirrora',
-
       debugShowCheckedModeBanner: false,
-
       theme: MirroraTheme.lightTheme,
-
       home: const SplashScreen(),
-      routes: {'/auth': (_) => const AuthScreen()},
+      routes: {
+        '/auth': (_) => const AuthScreen(),
+      },
     );
   }
 }
 
 // ============================================================
-
 // SPLASH SCREEN
-
 // ============================================================
 
 class SplashScreen extends StatefulWidget {
@@ -66,11 +63,12 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    Timer(const Duration(seconds: 2), () async {
+    Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
 
       final user = supabase.auth.currentUser;
       final settings = Hive.box('settingsBox');
+
       final biometricEnabled = settings.get(
         'mirrora_biometric_enabled',
         defaultValue: false,
@@ -88,7 +86,9 @@ class _SplashScreenState extends State<SplashScreen> {
               'Mirrora',
           onUsePassword: (ctx) => Navigator.pushReplacement(
             ctx,
-            MaterialPageRoute(builder: (_) => const AuthScreen()),
+            MaterialPageRoute(
+              builder: (_) => const AuthScreen(),
+            ),
           ),
         );
       } else {
@@ -113,23 +113,16 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: MirroraTheme.white,
-
       body: Center(
         child: Image.asset(
           'assets/mirrora_logo.png',
-
-          width: 300,
-
+          width: 230,
           fit: BoxFit.contain,
-
           errorBuilder: (_, __, ___) => const Text(
             'Mirrora',
-
             style: TextStyle(
-              fontSize: 38,
-
+              fontSize: 34,
               fontWeight: FontWeight.w600,
-
               color: MirroraTheme.dustyRose,
             ),
           ),
@@ -140,9 +133,7 @@ class _SplashScreenState extends State<SplashScreen> {
 }
 
 // ============================================================
-
 // ONBOARDING SCREEN
-
 // ============================================================
 
 class OnboardingScreen extends StatefulWidget {
@@ -160,28 +151,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<Map<String, String>> _pages = [
     {
       'title': 'Discover Your Beauty',
-
       'description':
           'Kenali dirimu lebih dalam dan temukan rutinitas yang cocok untukmu.',
-
       'icon': 'face',
     },
-
     {
       'title': 'Your Personal Space',
-
       'description':
           'Simpan preferensi dan perjalanan perawatanmu dalam satu tempat.',
-
       'icon': 'spa',
     },
-
     {
       'title': 'Glow With Confidence',
-
       'description':
           'Mulai perjalanan merawat diri dengan cara yang lebih personal.',
-
       'icon': 'favorite',
     },
   ];
@@ -190,7 +173,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (_currentPage < _pages.length - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),
-
         curve: Curves.easeInOut,
       );
     } else {
@@ -201,7 +183,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _openAuth() {
     Navigator.pushReplacement(
       context,
-
       MaterialPageRoute(builder: (_) => const AuthScreen()),
     );
   }
@@ -210,10 +191,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     switch (name) {
       case 'face':
         return Icons.face_retouching_natural;
-
       case 'spa':
         return Icons.spa_outlined;
-
       default:
         return Icons.favorite_border_rounded;
     }
@@ -222,7 +201,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void dispose() {
     _pageController.dispose();
-
     super.dispose();
   }
 
@@ -230,92 +208,66 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: MirroraTheme.cream,
-
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-
+          padding: const EdgeInsets.fromLTRB(28, 16, 28, 24),
           child: Column(
             children: [
               Align(
                 alignment: Alignment.centerRight,
-
                 child: TextButton(
                   onPressed: _openAuth,
-
                   child: const Text(
                     'Lewati',
-
-                    style: TextStyle(color: MirroraTheme.warmGray),
+                    style: TextStyle(
+                      color: MirroraTheme.warmGray,
+                    ),
                   ),
                 ),
               ),
-
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
-
                   itemCount: _pages.length,
-
                   onPageChanged: (index) {
                     setState(() => _currentPage = index);
                   },
-
                   itemBuilder: (context, index) {
                     final page = _pages[index];
 
                     return Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-
                       children: [
                         Container(
-                          width: 210,
-
-                          height: 210,
-
+                          width: 190,
+                          height: 190,
                           decoration: const BoxDecoration(
                             color: MirroraTheme.blushPink,
-
                             shape: BoxShape.circle,
                           ),
-
                           child: Icon(
                             _iconForPage(page['icon']!),
-
-                            size: 100,
-
+                            size: 88,
                             color: MirroraTheme.dustyRose,
                           ),
                         ),
-
-                        const SizedBox(height: 42),
-
+                        const SizedBox(height: 34),
                         Text(
                           page['title']!,
-
                           textAlign: TextAlign.center,
-
                           style: const TextStyle(
-                            fontSize: 27,
-
+                            fontSize: 26,
                             fontWeight: FontWeight.w700,
-
                             color: MirroraTheme.charcoal,
                           ),
                         ),
-
-                        const SizedBox(height: 16),
-
+                        const SizedBox(height: 14),
                         Text(
                           page['description']!,
-
                           textAlign: TextAlign.center,
-
                           style: const TextStyle(
                             fontSize: 15,
-
                             height: 1.7,
-
                             color: MirroraTheme.warmGray,
                           ),
                         ),
@@ -324,43 +276,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   },
                 ),
               ),
-
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-
                 children: List.generate(
                   _pages.length,
-
                   (index) => AnimatedContainer(
                     duration: const Duration(milliseconds: 250),
-
                     margin: const EdgeInsets.symmetric(horizontal: 4),
-
                     width: _currentPage == index ? 25 : 8,
-
                     height: 8,
-
                     decoration: BoxDecoration(
                       color: _currentPage == index
                           ? MirroraTheme.dustyRose
                           : MirroraTheme.blushPink,
-
                       borderRadius: BorderRadius.circular(20),
                     ),
                   ),
                 ),
               ),
-
-              const SizedBox(height: 28),
-
+              const SizedBox(height: 26),
               SizedBox(
                 width: double.infinity,
-
                 height: 52,
-
                 child: ElevatedButton(
                   onPressed: _nextPage,
-
                   child: Text(
                     _currentPage == _pages.length - 1
                         ? 'Mulai Sekarang'
@@ -377,9 +316,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 // ============================================================
-
 // LOGIN & REGISTER SCREEN
-
 // ============================================================
 
 class AuthScreen extends StatefulWidget {
@@ -393,13 +330,9 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _identityController = TextEditingController();
-
   final _usernameController = TextEditingController();
-
   final _emailController = TextEditingController();
-
   final _passwordController = TextEditingController();
-
   final _confirmPasswordController = TextEditingController();
 
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -407,15 +340,10 @@ class _AuthScreenState extends State<AuthScreen> {
   int _selectedTab = 0;
 
   bool _rememberMe = false;
-
   bool _obscurePassword = true;
-
   bool _obscureConfirmPassword = true;
-
   bool _biometricEnabled = false;
-
   bool _isLoading = false;
-
   bool _isBiometricLoading = false;
 
   bool get isLogin => _selectedTab == 0;
@@ -423,14 +351,16 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   void initState() {
     super.initState();
-
     _loadBiometricStatus();
   }
 
   Future<void> _loadBiometricStatus() async {
     final settings = Hive.box('settingsBox');
-    final enabled =
-        settings.get('mirrora_biometric_enabled', defaultValue: false) as bool;
+
+    final enabled = settings.get(
+      'mirrora_biometric_enabled',
+      defaultValue: false,
+    ) as bool;
 
     if (!mounted) return;
 
@@ -445,7 +375,10 @@ class _AuthScreenState extends State<AuthScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
   }
 
@@ -496,9 +429,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   // ==========================================================
-
   // SUPABASE AUTHENTICATION
-
   // ==========================================================
 
   Future<void> _submitForm() async {
@@ -512,11 +443,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (isLogin) {
-        // Supabase Auth menerima email dan password.
-
         final response = await supabase.auth.signInWithPassword(
           email: _identityController.text.trim(),
-
           password: _passwordController.text,
         );
 
@@ -537,26 +465,25 @@ class _AuthScreenState extends State<AuthScreen> {
           );
         }
       } else {
-        // Username disimpan sebagai metadata akun.
-
         final username = _usernameController.text.trim();
-
         final email = _emailController.text.trim();
 
         final response = await supabase.auth.signUp(
           email: email,
-
           password: _passwordController.text,
-
-          data: {'username': username},
+          data: {
+            'username': username,
+          },
         );
 
         if (!mounted) return;
 
         if (response.session != null && response.user != null) {
-          // Sesi langsung tersedia jika konfirmasi email tidak diwajibkan.
           final user = response.user!;
-          _showMessage('Registrasi berhasil! Selamat datang di Mirrora.');
+
+          _showMessage(
+            'Registrasi berhasil! Selamat datang di Mirrora.',
+          );
 
           Navigator.pushAndRemoveUntil(
             context,
@@ -571,20 +498,16 @@ class _AuthScreenState extends State<AuthScreen> {
             (_) => false,
           );
         } else {
-          // Umumnya terjadi saat konfirmasi email diaktifkan.
-
           _showMessage(
-            'Registrasi berhasil, silakan login untuk masuk ke profil anda!',
+            'Registrasi berhasil. Silakan cek email jika diminta konfirmasi, lalu login.',
           );
 
           _selectTab(0);
-
           _identityController.text = email;
         }
       }
     } on AuthException catch (e) {
       if (!mounted) return;
-
       _showMessage(_friendlyAuthError(e.message));
     } catch (_) {
       if (!mounted) return;
@@ -618,6 +541,11 @@ class _AuthScreenState extends State<AuthScreen> {
       return 'Email belum dikonfirmasi. Periksa kotak masuk email kamu.';
     }
 
+    if (error.contains('email rate limit exceeded') ||
+        error.contains('rate limit')) {
+      return 'Batas pengiriman email tercapai. Silakan coba lagi nanti.';
+    }
+
     if (error.contains('network') || error.contains('socket')) {
       return 'Tidak dapat terhubung ke server. Periksa internet kamu.';
     }
@@ -626,9 +554,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   // ==========================================================
-
   // FINGERPRINT
-
   // ==========================================================
 
   Future<bool> _authenticateFingerprint() async {
@@ -638,20 +564,19 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       final canAuthenticate = await _localAuth.canCheckBiometrics;
-
       final isSupported = await _localAuth.isDeviceSupported();
 
       if (!canAuthenticate || !isSupported) {
-        _showMessage('Perangkat belum mendukung autentikasi biometrik.');
-
+        _showMessage(
+          'Perangkat belum mendukung autentikasi biometrik.',
+        );
         return false;
       }
 
       final authenticated = await _localAuth.authenticate(
-        localizedReason: 'Verifikasi sidik jari untuk melanjutkan ke Mirrora',
-
+        localizedReason:
+            'Verifikasi sidik jari untuk melanjutkan ke Mirrora',
         biometricOnly: true,
-
         persistAcrossBackgrounding: true,
       );
 
@@ -661,12 +586,14 @@ class _AuthScreenState extends State<AuthScreen> {
 
       return authenticated;
     } on LocalAuthException catch (e) {
-      _showMessage('Fingerprint tidak dapat digunakan: ${e.code.name}');
-
+      _showMessage(
+        'Fingerprint tidak dapat digunakan: ${e.code.name}',
+      );
       return false;
     } catch (_) {
-      _showMessage('Terjadi kesalahan saat memverifikasi fingerprint.');
-
+      _showMessage(
+        'Terjadi kesalahan saat memverifikasi fingerprint.',
+      );
       return false;
     } finally {
       if (mounted) {
@@ -681,7 +608,10 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!success || !mounted) return;
 
     try {
-      await Hive.box('settingsBox').put('mirrora_biometric_enabled', true);
+      await Hive.box('settingsBox').put(
+        'mirrora_biometric_enabled',
+        true,
+      );
 
       if (!mounted) return;
 
@@ -694,16 +624,17 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _loginWithBiometrics() async {
-    final enabled = Hive.box(
-      'settingsBox',
-    ).get('mirrora_biometric_enabled', defaultValue: false) as bool;
+    final enabled = Hive.box('settingsBox').get(
+      'mirrora_biometric_enabled',
+      defaultValue: false,
+    ) as bool;
 
     if (!enabled) {
       _showMessage('Aktifkan fingerprint terlebih dahulu.');
       return;
     }
 
-    // Biometrik bukan pengganti login Supabase.
+    // Autentikasi biometrik tidak menggantikan sesi Supabase.
     final session = supabase.auth.currentSession;
 
     if (session == null) {
@@ -747,35 +678,29 @@ class _AuthScreenState extends State<AuthScreen> {
       _formKey.currentState?.reset();
 
       _passwordController.clear();
-
       _confirmPasswordController.clear();
+
+      _obscurePassword = true;
+      _obscureConfirmPassword = true;
     });
   }
 
   // ==========================================================
-
   // WIDGET HELPERS
-
   // ==========================================================
 
   Widget _buildLogo() {
     return Image.asset(
       'assets/mirrora_logo.png',
-
-      width: 280,
-
-      height: 140,
-
+      width: 180,
+      height: 82,
       fit: BoxFit.contain,
-
       errorBuilder: (_, __, ___) => const Text(
         'Mirrora',
-
+        textAlign: TextAlign.center,
         style: TextStyle(
-          fontSize: 36,
-
+          fontSize: 31,
           fontWeight: FontWeight.w700,
-
           color: MirroraTheme.dustyRose,
         ),
       ),
@@ -784,103 +709,53 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Widget _buildTextField({
     required TextEditingController controller,
-
     required String label,
-
     required String hint,
-
     required IconData icon,
-
     required String? Function(String?) validator,
-
     bool obscureText = false,
-
     VoidCallback? onToggleVisibility,
-
     TextInputType keyboardType = TextInputType.text,
-
     TextInputAction textInputAction = TextInputAction.next,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-
       children: [
         Text(
           label,
-
           style: const TextStyle(
             color: MirroraTheme.charcoal,
-
             fontWeight: FontWeight.w600,
-
             fontSize: 14,
           ),
         ),
-
-        const SizedBox(height: 9),
-
+        const SizedBox(height: 8),
         TextFormField(
           controller: controller,
-
           validator: validator,
-
           obscureText: obscureText,
-
           keyboardType: keyboardType,
-
           textInputAction: textInputAction,
-
           decoration: InputDecoration(
             hintText: hint,
-
-            prefixIcon: Icon(icon, color: MirroraTheme.dustyRose),
-
+            prefixIcon: Icon(
+              icon,
+              color: MirroraTheme.dustyRose,
+            ),
             suffixIcon: onToggleVisibility == null
                 ? null
                 : IconButton(
                     onPressed: onToggleVisibility,
-
                     icon: Icon(
                       obscureText
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
+                      color: MirroraTheme.warmGray,
                     ),
                   ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSocialButton({
-    required String label,
-
-    required IconData icon,
-
-    required VoidCallback onPressed,
-  }) {
-    return Expanded(
-      child: OutlinedButton.icon(
-        onPressed: onPressed,
-
-        icon: Icon(icon, size: 20),
-
-        label: Text(label),
-
-        style: OutlinedButton.styleFrom(
-          foregroundColor: MirroraTheme.charcoal,
-
-          side: const BorderSide(color: MirroraTheme.blushPink),
-
-          minimumSize: const Size(0, 48),
-
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28),
-          ),
-        ),
-      ),
     );
   }
 
@@ -890,27 +765,24 @@ class _AuthScreenState extends State<AuthScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () => _selectTab(index),
-
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-
-          padding: const EdgeInsets.symmetric(vertical: 13),
-
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? MirroraTheme.dustyRose : Colors.transparent,
-
+            color: selected
+                ? MirroraTheme.dustyRose
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(25),
           ),
-
           child: Text(
             label,
-
             textAlign: TextAlign.center,
-
             style: TextStyle(
-              color: selected ? MirroraTheme.white : MirroraTheme.warmGray,
-
+              color: selected
+                  ? MirroraTheme.white
+                  : MirroraTheme.warmGray,
               fontWeight: FontWeight.w600,
+              fontSize: 14,
             ),
           ),
         ),
@@ -918,235 +790,218 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _identityController.dispose();
-
-    _usernameController.dispose();
-
-    _emailController.dispose();
-
-    _passwordController.dispose();
-
-    _confirmPasswordController.dispose();
-
-    super.dispose();
+  Widget _buildFooter() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 22),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        children: [
+          Text(
+            isLogin ? 'Belum punya akun? ' : 'Sudah punya akun? ',
+            style: const TextStyle(
+              color: MirroraTheme.warmGray,
+              fontSize: 13,
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _selectTab(isLogin ? 1 : 0),
+            child: Text(
+              isLogin ? 'Register' : 'Login',
+              style: const TextStyle(
+                color: MirroraTheme.dustyRose,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ==========================================================
-
   // AUTH UI
-
   // ==========================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: MirroraTheme.white,
-
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(26, 18, 26, 30),
-
+            keyboardDismissBehavior:
+                ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(26, 12, 26, 20),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
-
               child: Form(
                 key: _formKey,
-
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-
                   children: [
+                    // Logo dibuat lebih kecil dan proporsional.
                     Center(child: _buildLogo()),
 
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 4),
 
                     Text(
-                      isLogin ? 'Welcome to Mirrora' : 'Create Your Account',
-
+                      isLogin
+                          ? 'Welcome to Mirrora'
+                          : 'Create Your Account',
                       textAlign: TextAlign.center,
-
                       style: const TextStyle(
                         fontSize: 25,
-
                         fontWeight: FontWeight.w700,
-
                         color: MirroraTheme.charcoal,
                       ),
                     ),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 7),
 
                     Text(
                       isLogin
                           ? 'Masuk dan lanjutkan perjalanan merawat dirimu.'
                           : 'Mulai perjalanan self-care bersama Mirrora.',
-
                       textAlign: TextAlign.center,
-
                       style: const TextStyle(
                         fontSize: 14,
-
                         height: 1.5,
-
                         color: MirroraTheme.warmGray,
                       ),
                     ),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 22),
 
+                    // TAB LOGIN / REGISTER
                     Container(
                       padding: const EdgeInsets.all(5),
-
                       decoration: BoxDecoration(
                         color: MirroraTheme.cream,
-
                         borderRadius: BorderRadius.circular(30),
                       ),
-
                       child: Row(
                         children: [
                           _buildTab('Login', 0),
-
                           _buildTab('Register', 1),
                         ],
                       ),
                     ),
 
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 23),
 
+                    // FIELD USERNAME DAN EMAIL REGISTER
                     if (isLogin) ...[
                       _buildTextField(
                         controller: _identityController,
-
                         label: 'Email',
-
                         hint: 'nama@email.com',
-
                         icon: Icons.email_outlined,
-
                         keyboardType: TextInputType.emailAddress,
-
                         validator: _validateEmail,
                       ),
                     ] else ...[
                       _buildTextField(
                         controller: _usernameController,
-
                         label: 'Username',
-
                         hint: 'Buat username',
-
                         icon: Icons.person_outline_rounded,
-
                         validator: _validateRequired,
                       ),
 
-                      const SizedBox(height: 17),
+                      const SizedBox(height: 15),
 
                       _buildTextField(
                         controller: _emailController,
-
                         label: 'Email',
-
                         hint: 'nama@email.com',
-
                         icon: Icons.email_outlined,
-
                         keyboardType: TextInputType.emailAddress,
-
                         validator: _validateEmail,
                       ),
                     ],
 
-                    const SizedBox(height: 17),
+                    const SizedBox(height: 15),
 
+                    // PASSWORD
                     _buildTextField(
                       controller: _passwordController,
-
                       label: 'Password',
-
                       hint: 'Masukkan password',
-
                       icon: Icons.lock_outline_rounded,
-
                       obscureText: _obscurePassword,
-
                       onToggleVisibility: () {
                         setState(() {
                           _obscurePassword = !_obscurePassword;
                         });
                       },
-
                       validator: _validatePassword,
-
                       textInputAction: isLogin
                           ? TextInputAction.done
                           : TextInputAction.next,
                     ),
 
+                    // KONFIRMASI PASSWORD REGISTER
                     if (!isLogin) ...[
-                      const SizedBox(height: 17),
+                      const SizedBox(height: 15),
 
                       _buildTextField(
                         controller: _confirmPasswordController,
-
                         label: 'Konfirmasi Password',
-
                         hint: 'Masukkan ulang password',
-
                         icon: Icons.lock_reset_rounded,
-
                         obscureText: _obscureConfirmPassword,
-
                         onToggleVisibility: () {
                           setState(() {
-                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                            _obscureConfirmPassword =
+                                !_obscureConfirmPassword;
                           });
                         },
-
                         validator: _validateConfirmation,
-
                         textInputAction: TextInputAction.done,
                       ),
                     ],
 
+                    // OPSI LOGIN
                     if (isLogin) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 5),
 
                       Row(
                         children: [
-                          Checkbox(
-                            value: _rememberMe,
-
-                            activeColor: MirroraTheme.dustyRose,
-
-                            onChanged: (value) {
-                              setState(() {
-                                _rememberMe = value ?? false;
-                              });
-                            },
+                          SizedBox(
+                            width: 38,
+                            child: Checkbox(
+                              value: _rememberMe,
+                              activeColor: MirroraTheme.dustyRose,
+                              onChanged: (value) {
+                                setState(() {
+                                  _rememberMe = value ?? false;
+                                });
+                              },
+                            ),
                           ),
+
+                          const SizedBox(width: 5),
 
                           const Expanded(
                             child: Text(
                               'Ingat saya',
-
                               style: TextStyle(fontSize: 13),
                             ),
                           ),
 
                           TextButton(
                             onPressed: _forgotPassword,
-
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                            ),
                             child: const Text(
                               'Lupa password?',
-
                               style: TextStyle(
                                 color: MirroraTheme.dustyRose,
-
                                 fontSize: 13,
                               ),
                             ),
@@ -1154,17 +1009,14 @@ class _AuthScreenState extends State<AuthScreen> {
                         ],
                       ),
                     ] else ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 13),
 
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
-
                         children: [
                           const Icon(
                             Icons.fingerprint_rounded,
-
                             color: MirroraTheme.dustyRose,
-
                             size: 22,
                           ),
 
@@ -1174,13 +1026,10 @@ class _AuthScreenState extends State<AuthScreen> {
                             child: Text(
                               _biometricEnabled
                                   ? 'Fingerprint sudah diaktifkan pada perangkat ini.'
-                                  : 'Aktifkan fingerprint setelah mengisi form registrasi.',
-
+                                  : 'Fingerprint dapat digunakan setelah login pertama dan aktivasi pada perangkat ini.',
                               style: const TextStyle(
                                 fontSize: 12,
-
                                 height: 1.5,
-
                                 color: MirroraTheme.warmGray,
                               ),
                             ),
@@ -1191,55 +1040,58 @@ class _AuthScreenState extends State<AuthScreen> {
 
                     const SizedBox(height: 12),
 
+                    // TOMBOL LOGIN / REGISTER
                     SizedBox(
-                      height: 52,
-
+                      height: 51,
                       child: ElevatedButton(
-                        onPressed: _isLoading || _isBiometricLoading
-                            ? null
-                            : _submitForm,
-
+                        onPressed:
+                            _isLoading || _isBiometricLoading
+                                ? null
+                                : _submitForm,
                         child: _isLoading
                             ? const SizedBox(
                                 width: 22,
-
                                 height: 22,
-
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                 ),
                               )
                             : Text(
                                 isLogin ? 'Login' : 'Register',
-
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w600,
-
                                   fontSize: 15,
                                 ),
                               ),
                       ),
                     ),
 
+                    // FINGERPRINT HANYA PADA LOGIN
                     if (isLogin) ...[
-                      const SizedBox(height: 14),
+                      const SizedBox(height: 12),
 
                       OutlinedButton.icon(
                         onPressed: _isBiometricLoading
                             ? null
                             : _loginWithBiometrics,
-
-                        icon: const Icon(Icons.fingerprint_rounded, size: 26),
-
-                        label: const Text('Login dengan Fingerprint'),
-
+                        icon: const Icon(
+                          Icons.fingerprint_rounded,
+                          size: 25,
+                        ),
+                        label: Text(
+                          _isBiometricLoading
+                              ? 'Memverifikasi...'
+                              : 'Login dengan Fingerprint',
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: MirroraTheme.dustyRose,
-
-                          minimumSize: const Size(double.infinity, 50),
-
-                          side: const BorderSide(color: MirroraTheme.blushPink),
-
+                          minimumSize: const Size(
+                            double.infinity,
+                            49,
+                          ),
+                          side: const BorderSide(
+                            color: MirroraTheme.blushPink,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(28),
                           ),
@@ -1247,91 +1099,24 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ],
 
-                    const SizedBox(height: 25),
+                    // FOOTER TANPA GOOGLE DAN APPLE
+                    const SizedBox(height: 4),
 
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Divider(color: MirroraTheme.blushPink),
+                    Center(
+                      child: Text(
+                        isLogin
+                            ? 'Lanjutkan perjalanan self-care-mu.'
+                            : 'Satu akun untuk perjalanan self-care-mu.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: MirroraTheme.warmGray,
+                          fontSize: 12,
+                          height: 1.5,
                         ),
-
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-
-                          child: Text(
-                            'atau lanjutkan dengan',
-
-                            style: TextStyle(
-                              color: MirroraTheme.warmGray,
-
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-
-                        const Expanded(
-                          child: Divider(color: MirroraTheme.blushPink),
-                        ),
-                      ],
+                      ),
                     ),
 
-                    const SizedBox(height: 18),
-
-                    Row(
-                      children: [
-                        _buildSocialButton(
-                          label: 'Google',
-
-                          icon: Icons.g_mobiledata_rounded,
-
-                          onPressed: _loginWithGoogle,
-                        ),
-
-                        const SizedBox(width: 12),
-
-                        _buildSocialButton(
-                          label: 'Apple',
-
-                          icon: Icons.apple,
-
-                          onPressed: _loginWithApple,
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 22),
-
-                    Wrap(
-                      alignment: WrapAlignment.center,
-
-                      children: [
-                        Text(
-                          isLogin ? 'Belum punya akun? ' : 'Sudah punya akun? ',
-
-                          style: const TextStyle(
-                            color: MirroraTheme.warmGray,
-
-                            fontSize: 13,
-                          ),
-                        ),
-
-                        GestureDetector(
-                          onTap: () => _selectTab(isLogin ? 1 : 0),
-
-                          child: Text(
-                            isLogin ? 'Register' : 'Login',
-
-                            style: const TextStyle(
-                              color: MirroraTheme.dustyRose,
-
-                              fontWeight: FontWeight.w700,
-
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    _buildFooter(),
                   ],
                 ),
               ),
@@ -1342,13 +1127,16 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
+  // ==========================================================
+  // FORGOT PASSWORD
+  // ==========================================================
+
   Future<void> _forgotPassword() async {
     final email = _identityController.text.trim();
 
     if (email.isEmpty ||
         !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
       _showMessage('Masukkan email yang valid terlebih dahulu.');
-
       return;
     }
 
@@ -1365,23 +1153,18 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Future<void> _loginWithGoogle() async {
-    try {
-      await supabase.auth.signInWithOAuth(OAuthProvider.google);
-    } on AuthException catch (e) {
-      _showMessage(_friendlyAuthError(e.message));
-    } catch (_) {
-      _showMessage('Login Google gagal dimulai.');
-    }
-  }
+  // ==========================================================
+  // DISPOSE
+  // ==========================================================
 
-  Future<void> _loginWithApple() async {
-    try {
-      await supabase.auth.signInWithOAuth(OAuthProvider.apple);
-    } on AuthException catch (e) {
-      _showMessage(_friendlyAuthError(e.message));
-    } catch (_) {
-      _showMessage('Login Apple gagal dimulai.');
-    }
+  @override
+  void dispose() {
+    _identityController.dispose();
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+
+    super.dispose();
   }
 }
