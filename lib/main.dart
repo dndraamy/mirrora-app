@@ -1,14 +1,16 @@
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'screens/main_navigation.dart';
+import 'services/auth_service.dart';
 import 'theme/mirrora_theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AuthService.init();
   runApp(const MirroraApp());
 }
 
@@ -42,13 +44,16 @@ class _SplashScreenState extends State<SplashScreen> {
   void initState() {
     super.initState();
 
-    Timer(const Duration(seconds: 2), () {
+    Timer(const Duration(seconds: 2), () async {
+      final user = await AuthService().currentUser();
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => const OnboardingScreen(),
+          builder: (_) => user == null
+              ? const OnboardingScreen()
+              : MainNavigation(userName: user['username'] as String),
         ),
       );
     });
@@ -163,9 +168,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onPressed: _openAuth,
                   child: const Text(
                     'Lewati',
-                    style: TextStyle(
-                      color: MirroraTheme.warmGray,
-                    ),
+                    style: TextStyle(color: MirroraTheme.warmGray),
                   ),
                 ),
               ),
@@ -280,8 +283,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _confirmPasswordController = TextEditingController();
 
   final LocalAuthentication _localAuth = LocalAuthentication();
-  final FlutterSecureStorage _secureStorage =
-      const FlutterSecureStorage();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   int _selectedTab = 0;
   bool _rememberMe = false;
@@ -289,6 +291,8 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _obscureConfirmPassword = true;
   bool _biometricEnabled = false;
   bool _isBiometricLoading = false;
+  bool _isSubmitting = false;
+  final AuthService _auth = AuthService();
 
   bool get isLogin => _selectedTab == 0;
 
@@ -300,9 +304,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _loadBiometricStatus() async {
     try {
-      final value = await _secureStorage.read(
-        key: 'mirrora_biometric_enabled',
-      );
+      final value = await _secureStorage.read(key: 'mirrora_biometric_enabled');
 
       if (!mounted) return;
 
@@ -320,10 +322,7 @@ class _AuthScreenState extends State<AuthScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        SnackBar(
-          content: Text(message),
-          behavior: SnackBarBehavior.floating,
-        ),
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
       );
   }
 
@@ -382,15 +381,12 @@ class _AuthScreenState extends State<AuthScreen> {
       final isDeviceSupported = await _localAuth.isDeviceSupported();
 
       if (!canAuthenticate || !isDeviceSupported) {
-        _showMessage(
-          'Perangkat belum mendukung autentikasi biometrik.',
-        );
+        _showMessage('Perangkat belum mendukung autentikasi biometrik.');
         return false;
       }
 
       final authenticated = await _localAuth.authenticate(
-        localizedReason:
-            'Verifikasi sidik jari untuk melanjutkan ke Mirrora',
+        localizedReason: 'Verifikasi sidik jari untuk melanjutkan ke Mirrora',
         biometricOnly: true,
         persistAcrossBackgrounding: true,
       );
@@ -401,14 +397,10 @@ class _AuthScreenState extends State<AuthScreen> {
 
       return authenticated;
     } on LocalAuthException catch (e) {
-      _showMessage(
-        'Fingerprint tidak dapat digunakan: ${e.code.name}',
-      );
+      _showMessage('Fingerprint tidak dapat digunakan: ${e.code.name}');
       return false;
     } catch (_) {
-      _showMessage(
-        'Terjadi kesalahan saat memverifikasi fingerprint.',
-      );
+      _showMessage('Terjadi kesalahan saat memverifikasi fingerprint.');
       return false;
     } finally {
       if (mounted) {
@@ -432,9 +424,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       setState(() => _biometricEnabled = true);
 
-      _showMessage(
-        'Fingerprint berhasil diaktifkan di perangkat ini.',
-      );
+      _showMessage('Fingerprint berhasil diaktifkan di perangkat ini.');
     } catch (_) {
       _showMessage(
         'Fingerprint terverifikasi, tetapi statusnya gagal disimpan.',
@@ -446,9 +436,7 @@ class _AuthScreenState extends State<AuthScreen> {
     String? enabled;
 
     try {
-      enabled = await _secureStorage.read(
-        key: 'mirrora_biometric_enabled',
-      );
+      enabled = await _secureStorage.read(key: 'mirrora_biometric_enabled');
     } catch (_) {
       _showMessage('Status fingerprint tidak dapat dibaca.');
       return;
@@ -465,10 +453,12 @@ class _AuthScreenState extends State<AuthScreen> {
 
     if (!success || !mounted) return;
 
-    _showMessage(
-      'Fingerprint terverifikasi. Hubungkan autentikasi akun '
-      'untuk menyelesaikan proses login.',
-    );
+    final user = await _auth.currentUser();
+    if (user == null) {
+      _showMessage('Silakan login manual dulu.');
+      return;
+    }
+    _openDashboard(user['username'] as String);
   }
 
   Future<void> _submitForm() async {
@@ -482,13 +472,41 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    if (isLogin) {
-      _showMessage(
-        'Validasi berhasil. Autentikasi akun belum dihubungkan.',
-      );
-    } else {
-      await _enableBiometrics();
+    setState(() => _isSubmitting = true);
+
+    try {
+      if (isLogin) {
+        final user = await _auth.login(
+          identity: _identityController.text,
+          password: _passwordController.text,
+        );
+        if (!mounted) return;
+        _openDashboard(user['username'] as String);
+      } else {
+        final user = await _auth.register(
+          username: _usernameController.text,
+          email: _emailController.text,
+          password: _passwordController.text,
+        );
+        if (!mounted) return;
+        await _enableBiometrics();
+        if (!mounted) return;
+        _openDashboard(user['username'] as String);
+      }
+    } on AuthException catch (e) {
+      _showMessage(e.message);
+    } catch (_) {
+      _showMessage('Terjadi kesalahan. Coba lagi.');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  void _openDashboard(String userName) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => MainNavigation(userName: userName)),
+    );
   }
 
   void _selectTab(int index) {
@@ -550,10 +568,7 @@ class _AuthScreenState extends State<AuthScreen> {
           textInputAction: textInputAction,
           decoration: InputDecoration(
             hintText: hint,
-            prefixIcon: Icon(
-              icon,
-              color: MirroraTheme.dustyRose,
-            ),
+            prefixIcon: Icon(icon, color: MirroraTheme.dustyRose),
             suffixIcon: onToggleVisibility == null
                 ? null
                 : IconButton(
@@ -621,9 +636,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     Center(child: _buildLogo()),
                     const SizedBox(height: 10),
                     Text(
-                      isLogin
-                          ? 'Welcome to Mirrora'
-                          : 'Create Your Account',
+                      isLogin ? 'Welcome to Mirrora' : 'Create Your Account',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 25,
@@ -717,8 +730,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         obscureText: _obscureConfirmPassword,
                         onToggleVisibility: () {
                           setState(() {
-                            _obscureConfirmPassword =
-                                !_obscureConfirmPassword;
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
                           });
                         },
                         validator: _validateConfirmation,
@@ -777,7 +789,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               _biometricEnabled
                                   ? 'Fingerprint sudah diaktifkan pada perangkat ini.'
                                   : 'Setelah validasi form, kamu dapat mengaktifkan '
-                                      'fingerprint pada perangkat ini.',
+                                        'fingerprint pada perangkat ini.',
                               style: const TextStyle(
                                 fontSize: 12,
                                 height: 1.5,
@@ -795,9 +807,10 @@ class _AuthScreenState extends State<AuthScreen> {
                     SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed:
-                            _isBiometricLoading ? null : _submitForm,
-                        child: _isBiometricLoading
+                        onPressed: (_isBiometricLoading || _isSubmitting)
+                            ? null
+                            : _submitForm,
+                        child: (_isBiometricLoading || _isSubmitting)
                             ? const SizedBox(
                                 width: 22,
                                 height: 22,
@@ -822,20 +835,12 @@ class _AuthScreenState extends State<AuthScreen> {
                         onPressed: _isBiometricLoading
                             ? null
                             : _loginWithBiometrics,
-                        icon: const Icon(
-                          Icons.fingerprint_rounded,
-                          size: 26,
-                        ),
+                        icon: const Icon(Icons.fingerprint_rounded, size: 26),
                         label: const Text('Login dengan Fingerprint'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: MirroraTheme.dustyRose,
-                          minimumSize: const Size(
-                            double.infinity,
-                            50,
-                          ),
-                          side: const BorderSide(
-                            color: MirroraTheme.blushPink,
-                          ),
+                          minimumSize: const Size(double.infinity, 50),
+                          side: const BorderSide(color: MirroraTheme.blushPink),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(28),
                           ),
@@ -874,9 +879,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           label: 'Google',
                           icon: Icons.g_mobiledata_rounded,
                           onPressed: () {
-                            _showMessage(
-                              'Login Google belum dihubungkan.',
-                            );
+                            _showMessage('Login Google belum dihubungkan.');
                           },
                         ),
                         const SizedBox(width: 12),
@@ -884,9 +887,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           label: 'Apple',
                           icon: Icons.apple,
                           onPressed: () {
-                            _showMessage(
-                              'Login Apple belum dihubungkan.',
-                            );
+                            _showMessage('Login Apple belum dihubungkan.');
                           },
                         ),
                       ],
@@ -898,9 +899,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       alignment: WrapAlignment.center,
                       children: [
                         Text(
-                          isLogin
-                              ? 'Belum punya akun? '
-                              : 'Sudah punya akun? ',
+                          isLogin ? 'Belum punya akun? ' : 'Sudah punya akun? ',
                           style: const TextStyle(
                             color: MirroraTheme.warmGray,
                             fontSize: 13,
@@ -939,18 +938,14 @@ class _AuthScreenState extends State<AuthScreen> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
-            color: selected
-                ? MirroraTheme.dustyRose
-                : Colors.transparent,
+            color: selected ? MirroraTheme.dustyRose : Colors.transparent,
             borderRadius: BorderRadius.circular(25),
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: selected
-                  ? MirroraTheme.white
-                  : MirroraTheme.warmGray,
+              color: selected ? MirroraTheme.white : MirroraTheme.warmGray,
               fontWeight: FontWeight.w600,
             ),
           ),
