@@ -1,5 +1,6 @@
-package com.example.mirrora_app
 
-import io.flutter.embedding.android.FlutterActivity
+package com.example.mirrora
 
-class MainActivity : FlutterActivity()
+import io.flutter.embedding.android.FlutterFragmentActivity
+
+class MainActivity : FlutterFragmentActivity()
