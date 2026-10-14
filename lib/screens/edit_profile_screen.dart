@@ -1,15 +1,18 @@
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../services/auth_service.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/profile_avatar.dart';
 
-/// Ubah foto profil dan username. Mengembalikan data user terbaru via pop().
 class EditProfileScreen extends StatefulWidget {
-  const EditProfileScreen({super.key, required this.user});
+  const EditProfileScreen({
+    super.key,
+    required this.user,
+  });
 
   final Map<String, dynamic> user;
 
@@ -18,17 +21,28 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
+  static const String _bucket = 'avatars';
+
   final _formKey = GlobalKey<FormState>();
-  final AuthService _auth = AuthService();
-  final ImagePicker _picker = ImagePicker();
+  final _picker = ImagePicker();
+  final SupabaseClient _supabase = Supabase.instance.client;
 
-  late final TextEditingController _usernameController = TextEditingController(
-    text: widget.user['username'] as String,
+  late final TextEditingController _usernameController =
+      TextEditingController(
+    text: widget.user['username'] as String? ?? '',
   );
-  late Uint8List? _photo = widget.user['photo'] as Uint8List?;
 
+  Uint8List? _photo;
+  String? _avatarPath;
   bool _photoChanged = false;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _photo = widget.user['photo'] as Uint8List?;
+    _avatarPath = widget.user['avatar_path'] as String?;
+  }
 
   @override
   void dispose() {
@@ -38,6 +52,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
@@ -51,6 +66,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         maxHeight: 512,
         imageQuality: 80,
       );
+
       if (file == null) return;
 
       final bytes = await file.readAsBytes();
@@ -74,10 +90,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _save() async {
     FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
+    final currentUser = _supabase.auth.currentUser;
+
+    if (currentUser == null) {
+      _showMessage('Sesi login berakhir. Silakan login kembali.');
+      return;
+    }
+
     final newName = _usernameController.text.trim();
-    final nameChanged = newName != widget.user['username'];
+    final oldName = widget.user['username'] as String? ?? '';
+    final nameChanged = newName != oldName;
 
     if (!nameChanged && !_photoChanged) {
       Navigator.pop(context);
@@ -86,18 +111,99 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     setState(() => _isSaving = true);
 
+    String? uploadedPath;
+    bool metadataUpdated = false;
+
     try {
-      final updated = await _auth.updateProfile(
-        username: nameChanged ? newName : null,
-        photo: _photoChanged ? _photo : null,
-        removePhoto: _photoChanged && _photo == null,
+      String? nextAvatarPath = _avatarPath;
+      String? nextAvatarUrl =
+          currentUser.userMetadata?['avatar_url'] as String?;
+
+      if (_photoChanged && _photo != null) {
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        uploadedPath = '${currentUser.id}/avatar_$timestamp.jpg';
+
+        await _supabase.storage.from(_bucket).uploadBinary(
+          uploadedPath,
+          _photo!,
+          fileOptions: const FileOptions(
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false,
+          ),
+        );
+
+        nextAvatarPath = uploadedPath;
+        nextAvatarUrl = _supabase.storage
+            .from(_bucket)
+            .getPublicUrl(uploadedPath);
+      } else if (_photoChanged && _photo == null) {
+        nextAvatarPath = null;
+        nextAvatarUrl = null;
+      }
+
+      final metadata = <String, dynamic>{
+        ...?currentUser.userMetadata,
+        'username': newName,
+      };
+
+      if (_photoChanged) {
+        if (nextAvatarPath == null) {
+          metadata.remove('avatar_path');
+          metadata.remove('avatar_url');
+        } else {
+          metadata['avatar_path'] = nextAvatarPath;
+          metadata['avatar_url'] = nextAvatarUrl;
+        }
+      }
+
+      final response = await _supabase.auth.updateUser(
+        UserAttributes(data: metadata),
       );
+
+      final updatedUser = response.user;
+
+      if (updatedUser == null) {
+        throw Exception('Data akun tidak berhasil diperbarui.');
+      }
+
+      metadataUpdated = true;
+
+      // Hapus foto lama hanya setelah metadata baru berhasil disimpan.
+      if (_photoChanged &&
+          _avatarPath != null &&
+          _avatarPath != nextAvatarPath) {
+        try {
+          await _supabase.storage
+              .from(_bucket)
+              .remove([_avatarPath!]);
+        } catch (_) {
+          // Foto baru tetap tersimpan meskipun penghapusan foto lama gagal.
+        }
+      }
+
       if (!mounted) return;
-      Navigator.pop(context, updated);
-    } on AuthException catch (e) {
-      _showMessage(e.message);
-    } catch (_) {
-      _showMessage('Gagal menyimpan. Coba lagi.');
+
+      Navigator.pop<Map<String, dynamic>>(context, {
+        'id': updatedUser.id,
+        'username': newName,
+        'email': updatedUser.email ?? '',
+        'photo': _photo,
+        'avatar_path': nextAvatarPath,
+        'avatar_url': nextAvatarUrl,
+      });
+    } catch (error) {
+      if (!metadataUpdated && uploadedPath != null) {
+        try {
+          await _supabase.storage.from(_bucket).remove([uploadedPath]);
+        } catch (_) {
+          // Pertahankan error utama untuk ditampilkan kepada pengguna.
+        }
+      }
+
+      _showMessage(
+        'Gagal menyimpan profil. Periksa koneksi dan kebijakan Storage, lalu coba lagi.',
+      );
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -106,6 +212,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final previewName = _usernameController.text;
+    final email = widget.user['email'] as String? ?? '';
 
     return Scaffold(
       backgroundColor: MirroraTheme.cream,
@@ -113,7 +220,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         backgroundColor: MirroraTheme.cream,
         title: const Text(
           'Edit Profil',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       body: SafeArea(
@@ -125,16 +235,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
-                  child: GestureDetector(
+                  child: ProfileAvatar(
+                    name: previewName.isEmpty
+                        ? (widget.user['username'] as String? ?? '')
+                        : previewName,
+                    photo: _photo,
+                    size: 128,
+                    showCamera: true,
                     onTap: _pickPhoto,
-                    child: ProfileAvatar(
-                      name: previewName.isEmpty
-                          ? widget.user['username'] as String
-                          : previewName,
-                      photo: _photo,
-                      size: 128,
-                      showCamera: true,
-                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -142,15 +250,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     TextButton(
-                      onPressed: _pickPhoto,
+                      onPressed: _isSaving ? null : _pickPhoto,
                       child: const Text('Ganti Foto'),
                     ),
                     if (_photo != null)
                       TextButton(
-                        onPressed: _removePhoto,
+                        onPressed: _isSaving ? null : _removePhoto,
                         child: const Text(
                           'Hapus Foto',
-                          style: TextStyle(color: MirroraTheme.warmGray),
+                          style: TextStyle(
+                            color: MirroraTheme.warmGray,
+                          ),
                         ),
                       ),
                   ],
@@ -167,6 +277,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 const SizedBox(height: 9),
                 TextFormField(
                   controller: _usernameController,
+                  enabled: !_isSaving,
                   textInputAction: TextInputAction.done,
                   onChanged: (_) => setState(() {}),
                   validator: (value) {
@@ -194,10 +305,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 const SizedBox(height: 9),
                 TextFormField(
-                  initialValue: widget.user['email'] as String,
+                  initialValue: email,
                   readOnly: true,
                   enabled: false,
-                  style: const TextStyle(color: MirroraTheme.warmGray),
+                  style: const TextStyle(
+                    color: MirroraTheme.warmGray,
+                  ),
                   decoration: const InputDecoration(
                     prefixIcon: Icon(
                       Icons.email_outlined,
@@ -214,7 +327,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           )
                         : const Text(
                             'Simpan',

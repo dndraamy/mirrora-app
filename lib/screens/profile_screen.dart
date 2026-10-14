@@ -1,8 +1,9 @@
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../services/auth_service.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/profile_avatar.dart';
 import 'edit_profile_screen.dart';
@@ -15,8 +16,6 @@ class ProfileScreen extends StatefulWidget {
   });
 
   final String userName;
-
-  /// Dipanggil setelah username berubah, supaya Home ikut diperbarui.
   final ValueChanged<String> onProfileChanged;
 
   @override
@@ -24,11 +23,18 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final AuthService _auth = AuthService();
-  Map<String, dynamic>? _user;
+  static const String _bucket = 'avatars';
 
-  String get _name => (_user?['username'] as String?) ?? widget.userName;
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  Map<String, dynamic>? _user;
+  bool _isLoading = true;
+
+  String get _name =>
+      (_user?['username'] as String?) ?? widget.userName;
+
   String get _email => (_user?['email'] as String?) ?? '';
+
   Uint8List? get _photo => _user?['photo'] as Uint8List?;
 
   @override
@@ -38,15 +44,54 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _loadUser() async {
-    final user = await _auth.currentUser();
+    final currentUser = _supabase.auth.currentUser;
+
+    if (currentUser == null) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      return;
+    }
+
+    final metadata = currentUser.userMetadata ?? {};
+    final email = currentUser.email ?? '';
+    final username =
+        (metadata['username'] as String?) ??
+        (email.contains('@') ? email.split('@').first : widget.userName);
+
+    Uint8List? photo;
+    final avatarPath = metadata['avatar_path'] as String?;
+
+    if (avatarPath != null && avatarPath.isNotEmpty) {
+      try {
+        photo = await _supabase.storage
+            .from(_bucket)
+            .download(avatarPath);
+      } catch (_) {
+        // Profil tetap bisa dibuka meskipun foto gagal diunduh.
+      }
+    }
+
     if (!mounted) return;
-    setState(() => _user = user);
+
+    setState(() {
+      _user = {
+        'id': currentUser.id,
+        'username': username,
+        'email': email,
+        'photo': photo,
+        'avatar_path': avatarPath,
+        'avatar_url': metadata['avatar_url'],
+      };
+      _isLoading = false;
+    });
   }
 
   void _comingSoon(String feature) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$feature segera hadir')));
+      ..showSnackBar(
+        SnackBar(content: Text('$feature segera hadir')),
+      );
   }
 
   Future<void> _openEditProfile() async {
@@ -55,7 +100,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final updated = await Navigator.push<Map<String, dynamic>>(
       context,
-      MaterialPageRoute(builder: (_) => EditProfileScreen(user: user)),
+      MaterialPageRoute(
+        builder: (_) => EditProfileScreen(user: user),
+      ),
     );
 
     if (updated == null || !mounted) return;
@@ -70,7 +117,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: MirroraTheme.white,
         surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+        ),
         title: const Text(
           'Keluar dari akun?',
           style: TextStyle(
@@ -81,7 +130,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         content: const Text(
           'Yakin mau keluar dari Mirrora?',
-          style: TextStyle(fontSize: 14, color: MirroraTheme.warmGray),
+          style: TextStyle(
+            fontSize: 14,
+            color: MirroraTheme.warmGray,
+          ),
         ),
         actions: [
           TextButton(
@@ -104,14 +156,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    await _auth.logout();
-    if (!mounted) return;
+    try {
+      await _supabase.auth.signOut();
+      if (!mounted) return;
 
-    Navigator.of(context).pushNamedAndRemoveUntil('/auth', (route) => false);
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/auth',
+        (route) => false,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal logout. Coba lagi.')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
@@ -129,14 +197,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 22),
             Center(
-              child: GestureDetector(
+              child: ProfileAvatar(
+                name: _name,
+                photo: _photo,
+                size: 120,
+                showCamera: true,
                 onTap: _openEditProfile,
-                child: ProfileAvatar(
-                  name: _name,
-                  photo: _photo,
-                  size: 120,
-                  showCamera: true,
-                ),
               ),
             ),
             const SizedBox(height: 18),
@@ -166,7 +232,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(22),
-                side: const BorderSide(color: MirroraTheme.blushPink),
+                side: const BorderSide(
+                  color: MirroraTheme.blushPink,
+                ),
               ),
               child: Column(
                 children: [
@@ -202,7 +270,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: const Icon(Icons.logout_rounded, size: 20),
               label: const Text(
                 'Logout',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: MirroraTheme.blushPink,
@@ -233,7 +304,10 @@ class _MenuTile extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         child: Row(
           children: [
             Container(
@@ -243,7 +317,11 @@ class _MenuTile extends StatelessWidget {
                 color: MirroraTheme.blushPink,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, size: 21, color: MirroraTheme.dustyRose),
+              child: Icon(
+                icon,
+                size: 21,
+                color: MirroraTheme.dustyRose,
+              ),
             ),
             const SizedBox(width: 14),
             Expanded(
