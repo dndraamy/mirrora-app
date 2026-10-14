@@ -574,8 +574,7 @@ class _AuthScreenState extends State<AuthScreen> {
           // Umumnya terjadi saat konfirmasi email diaktifkan.
 
           _showMessage(
-            'Registrasi berhasil. Periksa email kamu untuk konfirmasi '
-            'sebelum login.',
+            'Registrasi berhasil, silakan login untuk masuk ke profil anda!',
           );
 
           _selectTab(0);
