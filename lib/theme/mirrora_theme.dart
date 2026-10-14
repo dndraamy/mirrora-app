@@ -9,6 +9,7 @@ class MirroraTheme {
   static const Color softGold = Color(0xFFC5A880);
   static const Color charcoal = Color(0xFF30272A);
   static const Color warmGray = Color(0xFF88827F);
+  static const Color success = Color(0xFF4E8F5E);
 
   static ThemeData get lightTheme {
     return ThemeData(
