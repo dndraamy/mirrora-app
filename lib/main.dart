@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'screens/biometric_login_screen.dart';
 import 'screens/main_navigation.dart';
 import 'services/auth_service.dart';
 import 'theme/mirrora_theme.dart';
@@ -24,6 +24,7 @@ class MirroraApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: MirroraTheme.lightTheme,
       home: const SplashScreen(),
+      routes: {'/auth': (_) => const AuthScreen()},
     );
   }
 }
@@ -45,16 +46,30 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
 
     Timer(const Duration(seconds: 2), () async {
-      final user = await AuthService().currentUser();
+      final auth = AuthService();
+      final user = await auth.currentUser();
+      final bioUser = auth.biometricUser();
       if (!mounted) return;
+
+      final Widget next;
+      if (user == null) {
+        next = const OnboardingScreen();
+      } else if (bioUser != null && bioUser['email'] == user['email']) {
+        // Ada session + fingerprint aktif: minta verifikasi dulu.
+        next = BiometricLoginScreen(
+          userName: user['username'] as String,
+          onUsePassword: (ctx) => Navigator.pushReplacement(
+            ctx,
+            MaterialPageRoute(builder: (_) => const AuthScreen()),
+          ),
+        );
+      } else {
+        next = MainNavigation(userName: user['username'] as String);
+      }
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (_) => user == null
-              ? const OnboardingScreen()
-              : MainNavigation(userName: user['username'] as String),
-        ),
+        MaterialPageRoute(builder: (_) => next),
       );
     });
   }
@@ -283,7 +298,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final _confirmPasswordController = TextEditingController();
 
   final LocalAuthentication _localAuth = LocalAuthentication();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   int _selectedTab = 0;
   bool _rememberMe = false;
@@ -302,18 +316,8 @@ class _AuthScreenState extends State<AuthScreen> {
     _loadBiometricStatus();
   }
 
-  Future<void> _loadBiometricStatus() async {
-    try {
-      final value = await _secureStorage.read(key: 'mirrora_biometric_enabled');
-
-      if (!mounted) return;
-
-      setState(() {
-        _biometricEnabled = value == 'true';
-      });
-    } catch (_) {
-      // Status biometrik akan dianggap belum aktif jika tidak dapat dibaca.
-    }
+  void _loadBiometricStatus() {
+    _biometricEnabled = _auth.biometricUser() != null;
   }
 
   void _showMessage(String message) {
@@ -409,16 +413,13 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Future<void> _enableBiometrics() async {
+  Future<void> _enableBiometrics(String email) async {
     final success = await _authenticateFingerprint();
 
     if (!success || !mounted) return;
 
     try {
-      await _secureStorage.write(
-        key: 'mirrora_biometric_enabled',
-        value: 'true',
-      );
+      await _auth.enableBiometric(email);
 
       if (!mounted) return;
 
@@ -432,33 +433,25 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Future<void> _loginWithBiometrics() async {
-    String? enabled;
+  void _loginWithBiometrics() {
+    final user = _auth.biometricUser();
 
-    try {
-      enabled = await _secureStorage.read(key: 'mirrora_biometric_enabled');
-    } catch (_) {
-      _showMessage('Status fingerprint tidak dapat dibaca.');
-      return;
-    }
-
-    if (enabled != 'true') {
+    if (user == null) {
       _showMessage(
         'Aktifkan fingerprint melalui menu Register terlebih dahulu.',
       );
       return;
     }
 
-    final success = await _authenticateFingerprint();
-
-    if (!success || !mounted) return;
-
-    final user = await _auth.currentUser();
-    if (user == null) {
-      _showMessage('Silakan login manual dulu.');
-      return;
-    }
-    _openDashboard(user['username'] as String);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BiometricLoginScreen(
+          userName: user['username'] as String,
+          onUsePassword: (ctx) => Navigator.pop(ctx),
+        ),
+      ),
+    );
   }
 
   Future<void> _submitForm() async {
@@ -489,7 +482,7 @@ class _AuthScreenState extends State<AuthScreen> {
           password: _passwordController.text,
         );
         if (!mounted) return;
-        await _enableBiometrics();
+        await _enableBiometrics(user['email'] as String);
         if (!mounted) return;
         _openDashboard(user['username'] as String);
       }

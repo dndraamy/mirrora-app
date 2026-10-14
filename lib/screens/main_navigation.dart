@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/mirrora_bottom_nav.dart';
 import 'home_screen.dart';
+import 'profile_screen.dart';
 
 /// Container utama setelah login: 5 tab (Home, Explore, AI, Profil, Settings).
 class MainNavigation extends StatefulWidget {
@@ -21,25 +22,29 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   late int _currentIndex = widget.initialIndex;
-
-  // Tab selain Home masih placeholder, ganti saat fiturnya dibuat.
-  late final List<Widget> _screens = [
-    HomeScreen(userName: widget.userName),
-    const _PlaceholderTab(title: 'Explore', icon: Icons.explore_rounded),
-    const _PlaceholderTab(
-      title: 'AI Beauty Assistant',
-      icon: Icons.auto_awesome_rounded,
-    ),
-    const _PlaceholderTab(title: 'Profil', icon: Icons.person_rounded),
-    const _PlaceholderTab(title: 'Settings', icon: Icons.settings_rounded),
-  ];
+  late String _userName = widget.userName;
 
   @override
   Widget build(BuildContext context) {
+    // Tab selain Home dan Profil masih placeholder, ganti saat fiturnya dibuat.
+    final screens = <Widget>[
+      HomeScreen(userName: _userName),
+      const _PlaceholderTab(title: 'Explore', icon: Icons.explore_rounded),
+      const _PlaceholderTab(
+        title: 'AI Beauty Assistant',
+        icon: Icons.auto_awesome_rounded,
+      ),
+      ProfileScreen(
+        userName: _userName,
+        onProfileChanged: (name) => setState(() => _userName = name),
+      ),
+      const _PlaceholderTab(title: 'Settings', icon: Icons.settings_rounded),
+    ];
+
     return Scaffold(
       backgroundColor: MirroraTheme.cream,
       // IndexedStack menjaga state tiap tab saat berpindah.
-      body: IndexedStack(index: _currentIndex, children: _screens),
+      body: IndexedStack(index: _currentIndex, children: screens),
       bottomNavigationBar: MirroraBottomNav(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
