@@ -4,6 +4,7 @@ import '../theme/mirrora_theme.dart';
 import '../widgets/mirrora_bottom_nav.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
+import 'settings_screen.dart';
 
 /// Container utama setelah login: 5 tab (Home, Explore, AI, Profil, Settings).
 class MainNavigation extends StatefulWidget {
@@ -38,7 +39,7 @@ class _MainNavigationState extends State<MainNavigation> {
         userName: _userName,
         onProfileChanged: (name) => setState(() => _userName = name),
       ),
-      const _PlaceholderTab(title: 'Settings', icon: Icons.settings_rounded),
+      const SettingsScreen(),
     ];
 
     return Scaffold(

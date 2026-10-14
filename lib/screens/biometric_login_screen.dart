@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../services/auth_service.dart';
 import '../theme/mirrora_theme.dart';
 import 'main_navigation.dart';
 
@@ -29,7 +29,6 @@ class BiometricLoginScreen extends StatefulWidget {
 
 class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
   final LocalAuthentication _localAuth = LocalAuthentication();
-  final AuthService _auth = AuthService();
 
   bool _isLoading = false;
   String? _error;
@@ -74,19 +73,24 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
         return;
       }
 
-      // Fingerprint cocok: pulihkan session dari akun yang terdaftar di Hive.
-      final user = await _auth.loginWithBiometric();
+      // Fingerprint cocok: ambil user dari Supabase session yang sudah ada.
+      final supabaseUser = Supabase.instance.client.auth.currentUser;
       if (!mounted) return;
 
-      if (user == null) {
-        _setError('Akun fingerprint tidak ditemukan. Login dengan password.');
+      if (supabaseUser == null) {
+        _setError('Sesi berakhir. Silakan login dengan password terlebih dahulu.');
         return;
       }
+
+      final userName =
+          supabaseUser.userMetadata?['username'] as String? ??
+          supabaseUser.email?.split('@').first ??
+          'Mirrora';
 
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => MainNavigation(userName: user['username'] as String),
+          builder: (_) => MainNavigation(userName: userName),
         ),
         (route) => false,
       );
@@ -119,7 +123,7 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
                       width: 200,
                       height: 100,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Text(
+                      errorBuilder: (_, _, _) => const Text(
                         'Mirrora',
                         style: TextStyle(
                           fontSize: 34,
