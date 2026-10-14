@@ -20,6 +20,7 @@ dependencies:
   local_auth: ^3.0.2
   bcrypt: ^1.2.0
   image_picker: ^1.1.2
+  supabase_flutter: ^2.18.3
 
 dev_dependencies:
   flutter_test:
