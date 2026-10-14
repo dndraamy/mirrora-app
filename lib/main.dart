@@ -4,13 +4,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'theme/mirrora_theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://paeuxgviqbajuitsosuq.supabase.co',
+    publishableKey: 'sb_publishable_OcM3vYtlHeqf8zBiZc_0jQ_3XRt8GDO',
+  );
+
   runApp(const MirroraApp());
 }
+
+final SupabaseClient supabase = Supabase.instance.client;
 
 class MirroraApp extends StatelessWidget {
   const MirroraApp({super.key});
@@ -45,10 +54,14 @@ class _SplashScreenState extends State<SplashScreen> {
     Timer(const Duration(seconds: 2), () {
       if (!mounted) return;
 
+      // Jika sudah memiliki sesi login, langsung ke halaman utama.
+      final hasSession = supabase.auth.currentSession != null;
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => const OnboardingScreen(),
+          builder: (_) =>
+              hasSession ? const HomeScreen() : const OnboardingScreen(),
         ),
       );
     });
@@ -97,7 +110,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       'title': 'Discover Your Beauty',
       'description':
           'Kenali dirimu lebih dalam dan temukan rutinitas yang cocok untukmu.',
-      'icon': 'face_retouching_natural',
+      'icon': 'face',
     },
     {
       'title': 'Your Personal Space',
@@ -133,7 +146,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   IconData _iconForPage(String name) {
     switch (name) {
-      case 'face_retouching_natural':
+      case 'face':
         return Icons.face_retouching_natural;
       case 'spa':
         return Icons.spa_outlined;
@@ -163,9 +176,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onPressed: _openAuth,
                   child: const Text(
                     'Lewati',
-                    style: TextStyle(
-                      color: MirroraTheme.warmGray,
-                    ),
+                    style: TextStyle(color: MirroraTheme.warmGray),
                   ),
                 ),
               ),
@@ -288,6 +299,7 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _biometricEnabled = false;
+  bool _isLoading = false;
   bool _isBiometricLoading = false;
 
   bool get isLogin => _selectedTab == 0;
@@ -305,12 +317,9 @@ class _AuthScreenState extends State<AuthScreen> {
       );
 
       if (!mounted) return;
-
-      setState(() {
-        _biometricEnabled = value == 'true';
-      });
+      setState(() => _biometricEnabled = value == 'true');
     } catch (_) {
-      // Status biometrik akan dianggap belum aktif jika tidak dapat dibaca.
+      // Fingerprint dianggap belum aktif jika status gagal dibaca.
     }
   }
 
@@ -339,9 +348,9 @@ class _AuthScreenState extends State<AuthScreen> {
       return 'Email wajib diisi';
     }
 
-    final emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    final pattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
-    if (!emailPattern.hasMatch(value.trim())) {
+    if (!pattern.hasMatch(value.trim())) {
       return 'Masukkan alamat email yang valid';
     }
 
@@ -372,6 +381,110 @@ class _AuthScreenState extends State<AuthScreen> {
     return null;
   }
 
+  // ==========================================================
+  // SUPABASE AUTHENTICATION
+  // ==========================================================
+
+  Future<void> _submitForm() async {
+    FocusScope.of(context).unfocus();
+
+    if (_isLoading) return;
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      if (isLogin) {
+        // Supabase Auth menerima email dan password.
+        final response = await supabase.auth.signInWithPassword(
+          email: _identityController.text.trim(),
+          password: _passwordController.text,
+        );
+
+        if (response.user != null && mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (_) => false,
+          );
+        }
+      } else {
+        // Username disimpan sebagai metadata akun.
+        final username = _usernameController.text.trim();
+        final email = _emailController.text.trim();
+
+        final response = await supabase.auth.signUp(
+          email: email,
+          password: _passwordController.text,
+          data: {
+            'username': username,
+          },
+        );
+
+        if (!mounted) return;
+
+        if (response.session != null) {
+          // Sesi langsung tersedia jika konfirmasi email tidak diwajibkan.
+          _showMessage('Registrasi berhasil! Selamat datang di Mirrora.');
+
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (_) => false,
+          );
+        } else {
+          // Umumnya terjadi saat konfirmasi email diaktifkan.
+          _showMessage(
+            'Registrasi berhasil. Periksa email kamu untuk konfirmasi '
+            'sebelum login.',
+          );
+
+          _selectTab(0);
+          _identityController.text = email;
+        }
+      }
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      _showMessage(_friendlyAuthError(e.message));
+        } catch (e, stackTrace) {
+      debugPrint('Mirrora Auth Error: $e');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+      _showMessage('Terjadi kesalahan: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  String _friendlyAuthError(String message) {
+    final error = message.toLowerCase();
+
+    if (error.contains('invalid login credentials')) {
+      return 'Email atau password salah.';
+    }
+    if (error.contains('user already registered')) {
+      return 'Email tersebut sudah terdaftar. Silakan login.';
+    }
+    if (error.contains('password should be at least')) {
+      return 'Password belum memenuhi ketentuan.';
+    }
+    if (error.contains('email not confirmed')) {
+      return 'Email belum dikonfirmasi. Periksa kotak masuk email kamu.';
+    }
+    if (error.contains('network') || error.contains('socket')) {
+      return 'Tidak dapat terhubung ke server. Periksa internet kamu.';
+    }
+
+    return message;
+  }
+
+  // ==========================================================
+  // FINGERPRINT
+  // ==========================================================
+
   Future<bool> _authenticateFingerprint() async {
     if (_isBiometricLoading) return false;
 
@@ -379,9 +492,9 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       final canAuthenticate = await _localAuth.canCheckBiometrics;
-      final isDeviceSupported = await _localAuth.isDeviceSupported();
+      final isSupported = await _localAuth.isDeviceSupported();
 
-      if (!canAuthenticate || !isDeviceSupported) {
+      if (!canAuthenticate || !isSupported) {
         _showMessage(
           'Perangkat belum mendukung autentikasi biometrik.',
         );
@@ -389,8 +502,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
 
       final authenticated = await _localAuth.authenticate(
-        localizedReason:
-            'Verifikasi sidik jari untuk melanjutkan ke Mirrora',
+        localizedReason: 'Verifikasi sidik jari untuk melanjutkan ke Mirrora',
         biometricOnly: true,
         persistAcrossBackgrounding: true,
       );
@@ -401,14 +513,10 @@ class _AuthScreenState extends State<AuthScreen> {
 
       return authenticated;
     } on LocalAuthException catch (e) {
-      _showMessage(
-        'Fingerprint tidak dapat digunakan: ${e.code.name}',
-      );
+      _showMessage('Fingerprint tidak dapat digunakan: ${e.code.name}');
       return false;
     } catch (_) {
-      _showMessage(
-        'Terjadi kesalahan saat memverifikasi fingerprint.',
-      );
+      _showMessage('Terjadi kesalahan saat memverifikasi fingerprint.');
       return false;
     } finally {
       if (mounted) {
@@ -429,16 +537,14 @@ class _AuthScreenState extends State<AuthScreen> {
       );
 
       if (!mounted) return;
-
       setState(() => _biometricEnabled = true);
 
       _showMessage(
-        'Fingerprint berhasil diaktifkan di perangkat ini.',
+        'Fingerprint diaktifkan pada perangkat ini. '
+        'Silakan login menggunakan email dan password terlebih dahulu.',
       );
     } catch (_) {
-      _showMessage(
-        'Fingerprint terverifikasi, tetapi statusnya gagal disimpan.',
-      );
+      _showMessage('Status fingerprint gagal disimpan.');
     }
   }
 
@@ -455,9 +561,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     if (enabled != 'true') {
-      _showMessage(
-        'Aktifkan fingerprint melalui menu Register terlebih dahulu.',
-      );
+      _showMessage('Aktifkan fingerprint terlebih dahulu.');
       return;
     }
 
@@ -465,29 +569,19 @@ class _AuthScreenState extends State<AuthScreen> {
 
     if (!success || !mounted) return;
 
-    _showMessage(
-      'Fingerprint terverifikasi. Hubungkan autentikasi akun '
-      'untuk menyelesaikan proses login.',
-    );
-  }
-
-  Future<void> _submitForm() async {
-    FocusScope.of(context).unfocus();
-
-    if (!_formKey.currentState!.validate()) return;
-
-    if (!isLogin &&
-        _passwordController.text != _confirmPasswordController.text) {
-      _showMessage('Konfirmasi password tidak cocok.');
-      return;
-    }
-
-    if (isLogin) {
-      _showMessage(
-        'Validasi berhasil. Autentikasi akun belum dihubungkan.',
+    // Fingerprint saja bukan sesi Supabase.
+    // Pengguna harus sudah memiliki sesi akun yang valid.
+    if (supabase.auth.currentSession != null) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (_) => false,
       );
     } else {
-      await _enableBiometrics();
+      _showMessage(
+        'Fingerprint terverifikasi. Untuk keamanan, login akun '
+        'menggunakan email dan password terlebih dahulu.',
+      );
     }
   }
 
@@ -501,6 +595,10 @@ class _AuthScreenState extends State<AuthScreen> {
       _confirmPasswordController.clear();
     });
   }
+
+  // ==========================================================
+  // WIDGET HELPERS
+  // ==========================================================
 
   Widget _buildLogo() {
     return Image.asset(
@@ -593,6 +691,36 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
+  Widget _buildTab(String label, int index) {
+    final selected = _selectedTab == index;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _selectTab(index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          decoration: BoxDecoration(
+            color: selected
+                ? MirroraTheme.dustyRose
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(25),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected
+                  ? MirroraTheme.white
+                  : MirroraTheme.warmGray,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _identityController.dispose();
@@ -602,6 +730,10 @@ class _AuthScreenState extends State<AuthScreen> {
     _confirmPasswordController.dispose();
     super.dispose();
   }
+
+  // ==========================================================
+  // AUTH UI
+  // ==========================================================
 
   @override
   Widget build(BuildContext context) {
@@ -621,9 +753,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     Center(child: _buildLogo()),
                     const SizedBox(height: 10),
                     Text(
-                      isLogin
-                          ? 'Welcome to Mirrora'
-                          : 'Create Your Account',
+                      isLogin ? 'Welcome to Mirrora' : 'Create Your Account',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 25,
@@ -645,7 +775,6 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                     const SizedBox(height: 28),
 
-                    // LOGIN / REGISTER TABS
                     Container(
                       padding: const EdgeInsets.all(5),
                       decoration: BoxDecoration(
@@ -664,10 +793,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     if (isLogin) ...[
                       _buildTextField(
                         controller: _identityController,
-                        label: 'Email atau Username',
-                        hint: 'Masukkan email atau username',
-                        icon: Icons.person_outline_rounded,
-                        validator: _validateRequired,
+                        label: 'Email',
+                        hint: 'nama@email.com',
+                        icon: Icons.email_outlined,
+                        keyboardType: TextInputType.emailAddress,
+                        validator: _validateEmail,
                       ),
                     ] else ...[
                       _buildTextField(
@@ -746,11 +876,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () {
-                              _showMessage(
-                                'Fitur lupa password belum dihubungkan.',
-                              );
-                            },
+                            onPressed: _forgotPassword,
                             child: const Text(
                               'Lupa password?',
                               style: TextStyle(
@@ -776,8 +902,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             child: Text(
                               _biometricEnabled
                                   ? 'Fingerprint sudah diaktifkan pada perangkat ini.'
-                                  : 'Setelah validasi form, kamu dapat mengaktifkan '
-                                      'fingerprint pada perangkat ini.',
+                                  : 'Aktifkan fingerprint setelah mengisi form registrasi.',
                               style: const TextStyle(
                                 fontSize: 12,
                                 height: 1.5,
@@ -791,13 +916,13 @@ class _AuthScreenState extends State<AuthScreen> {
 
                     const SizedBox(height: 12),
 
-                    // PRIMARY BUTTON
                     SizedBox(
                       height: 52,
                       child: ElevatedButton(
-                        onPressed:
-                            _isBiometricLoading ? null : _submitForm,
-                        child: _isBiometricLoading
+                        onPressed: _isLoading || _isBiometricLoading
+                            ? null
+                            : _submitForm,
+                        child: _isLoading
                             ? const SizedBox(
                                 width: 22,
                                 height: 22,
@@ -815,7 +940,6 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
 
-                    // BIOMETRIC LOGIN BUTTON
                     if (isLogin) ...[
                       const SizedBox(height: 14),
                       OutlinedButton.icon(
@@ -829,10 +953,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         label: const Text('Login dengan Fingerprint'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: MirroraTheme.dustyRose,
-                          minimumSize: const Size(
-                            double.infinity,
-                            50,
-                          ),
+                          minimumSize: const Size(double.infinity, 50),
                           side: const BorderSide(
                             color: MirroraTheme.blushPink,
                           ),
@@ -873,21 +994,13 @@ class _AuthScreenState extends State<AuthScreen> {
                         _buildSocialButton(
                           label: 'Google',
                           icon: Icons.g_mobiledata_rounded,
-                          onPressed: () {
-                            _showMessage(
-                              'Login Google belum dihubungkan.',
-                            );
-                          },
+                          onPressed: _loginWithGoogle,
                         ),
                         const SizedBox(width: 12),
                         _buildSocialButton(
                           label: 'Apple',
                           icon: Icons.apple,
-                          onPressed: () {
-                            _showMessage(
-                              'Login Apple belum dihubungkan.',
-                            );
-                          },
+                          onPressed: _loginWithApple,
                         ),
                       ],
                     ),
@@ -898,9 +1011,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       alignment: WrapAlignment.center,
                       children: [
                         Text(
-                          isLogin
-                              ? 'Belum punya akun? '
-                              : 'Sudah punya akun? ',
+                          isLogin ? 'Belum punya akun? ' : 'Sudah punya akun? ',
                           style: const TextStyle(
                             color: MirroraTheme.warmGray,
                             fontSize: 13,
@@ -929,30 +1040,115 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 
-  Widget _buildTab(String label, int index) {
-    final selected = _selectedTab == index;
+  Future<void> _forgotPassword() async {
+    final email = _identityController.text.trim();
 
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _selectTab(index),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          decoration: BoxDecoration(
-            color: selected
-                ? MirroraTheme.dustyRose
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(25),
+    if (email.isEmpty ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      _showMessage('Masukkan email yang valid terlebih dahulu.');
+      return;
+    }
+
+    try {
+      await supabase.auth.resetPasswordForEmail(email);
+      _showMessage('Jika email terdaftar, tautan reset akan dikirim ke email kamu.');
+    } on AuthException catch (e) {
+      _showMessage(_friendlyAuthError(e.message));
+    } catch (_) {
+      _showMessage('Gagal mengirim permintaan reset password.');
+    }
+  }
+
+  Future<void> _loginWithGoogle() async {
+    try {
+      await supabase.auth.signInWithOAuth(OAuthProvider.google);
+    } on AuthException catch (e) {
+      _showMessage(_friendlyAuthError(e.message));
+    } catch (_) {
+      _showMessage('Login Google gagal dimulai.');
+    }
+  }
+
+  Future<void> _loginWithApple() async {
+    try {
+      await supabase.auth.signInWithOAuth(OAuthProvider.apple);
+    } on AuthException catch (e) {
+      _showMessage(_friendlyAuthError(e.message));
+    } catch (_) {
+      _showMessage('Login Apple gagal dimulai.');
+    }
+  }
+}
+
+// ============================================================
+// HOME SCREEN SEMENTARA
+// Ganti dengan halaman dashboard tim kamu jika sudah tersedia.
+// ============================================================
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final user = supabase.auth.currentUser;
+    final username = user?.userMetadata?['username'] as String?;
+
+    return Scaffold(
+      backgroundColor: MirroraTheme.cream,
+      appBar: AppBar(
+        title: const Text('Mirrora'),
+        actions: [
+          IconButton(
+            tooltip: 'Logout',
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () async {
+              await supabase.auth.signOut();
+
+              if (!context.mounted) return;
+
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AuthScreen(),
+                ),
+                (_) => false,
+              );
+            },
           ),
-          child: Text(
-            label,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: selected
-                  ? MirroraTheme.white
-                  : MirroraTheme.warmGray,
-              fontWeight: FontWeight.w600,
-            ),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.spa_outlined,
+                size: 76,
+                color: MirroraTheme.dustyRose,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Welcome to Mirrora${username != null ? ', $username' : ''}!',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w700,
+                  color: MirroraTheme.charcoal,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Login berhasil. Halaman ini sementara dan nantinya '
+                'bisa diganti dengan dashboard Mirrora.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  height: 1.6,
+                  color: MirroraTheme.warmGray,
+                ),
+              ),
+            ],
           ),
         ),
       ),
