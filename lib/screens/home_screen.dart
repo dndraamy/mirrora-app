@@ -1,9 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/mirrora_theme.dart';
 import 'bubble_pop_screen.dart';
+import 'shake_to_pick_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.userName = 'Sarah'});
@@ -30,6 +33,41 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   int get _doneCount => _routines.where((r) => r.done).length;
+
+  // ── Lifecycle ──────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    // Tampilkan daily prompt setelah frame pertama selesai di-render
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowDailyPrompt());
+  }
+
+  /// Tampilkan dialog Shake to Pick sekali per hari (per akun).
+  Future<void> _maybeShowDailyPrompt() async {
+    if (!mounted) return;
+    final box = Hive.box('settingsBox');
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? 'anonymous';
+    final today = DateTime.now();
+    final dateKey =
+        '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+    final promptKey = 'shake_prompt_last_date_$uid';
+    final lastShown = box.get(promptKey, defaultValue: '') as String;
+
+    if (lastShown == dateKey) return; // sudah ditampilkan hari ini untuk akun ini
+
+    await box.put(promptKey, dateKey);
+    if (!mounted) return;
+
+    // Delay kecil agar UI home sudah fully visible sebelum popup muncul
+    await Future.delayed(const Duration(milliseconds: 800));
+    if (!mounted) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => const ShakeToPickPromptDialog(),
+    );
+  }
 
   void _toggleRoutine(_RoutineItem item) {
     setState(() => item.done = !item.done);
@@ -223,7 +261,10 @@ class _HomeScreenState extends State<HomeScreen> {
           child: _QuickAccessCard(
             icon: Icons.vibration_rounded,
             label: 'Shake to Pick',
-            onTap: () => _comingSoon('Shake to Pick'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ShakeToPickScreen()),
+            ),
           ),
         ),
         const SizedBox(width: 12),
