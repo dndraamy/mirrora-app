@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/ai_service.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/profile_avatar.dart';
 import 'edit_profile_screen.dart';
@@ -157,6 +158,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (confirmed != true || !mounted) return;
 
     try {
+      AiService().clearChatSession();
       await _supabase.auth.signOut();
       if (!mounted) return;
 

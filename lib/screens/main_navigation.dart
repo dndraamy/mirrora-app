@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/mirrora_theme.dart';
 import '../widgets/mirrora_bottom_nav.dart';
+import 'ai_assistant_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
@@ -31,10 +32,7 @@ class _MainNavigationState extends State<MainNavigation> {
     final screens = <Widget>[
       HomeScreen(userName: _userName),
       const _PlaceholderTab(title: 'Explore', icon: Icons.explore_rounded),
-      const _PlaceholderTab(
-        title: 'AI Beauty Assistant',
-        icon: Icons.auto_awesome_rounded,
-      ),
+      AiAssistantScreen(userName: _userName),
       ProfileScreen(
         userName: _userName,
         onProfileChanged: (name) => setState(() => _userName = name),
