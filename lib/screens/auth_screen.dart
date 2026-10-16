@@ -34,6 +34,10 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLoading = false;
   bool _isBiometricLoading = false;
 
+  // State setelah register — menunggu konfirmasi email
+  bool _awaitingConfirmation = false;
+  String _pendingEmail = '';
+
   bool get isLogin => _selectedTab == 0;
 
   /// Tombol sidik jari hanya tampil jika:
@@ -68,10 +72,10 @@ class _AuthScreenState extends State<AuthScreen> {
   // ────────────────────────────────────────────────────────────
 
   Future<void> _loadStatus() async {
-    final enabled = Hive.box('settingsBox')
-        .get('mirrora_biometric_enabled', defaultValue: false) as bool;
-    final hasSession =
-        Supabase.instance.client.auth.currentSession != null;
+    final enabled = Hive.box(
+      'settingsBox',
+    ).get('mirrora_biometric_enabled', defaultValue: false) as bool;
+    final hasSession = Supabase.instance.client.auth.currentSession != null;
     if (!mounted) return;
     setState(() {
       _biometricEnabled = enabled;
@@ -159,8 +163,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (isLogin) {
-        final response =
-            await Supabase.instance.client.auth.signInWithPassword(
+        final response = await Supabase.instance.client.auth.signInWithPassword(
           email: _identityController.text.trim(),
           password: _passwordController.text,
         );
@@ -176,6 +179,7 @@ class _AuthScreenState extends State<AuthScreen> {
           email: email,
           password: _passwordController.text,
           data: {'username': username},
+          emailRedirectTo: 'mirrora://login-callback/',
         );
 
         if (!mounted) return;
@@ -184,11 +188,11 @@ class _AuthScreenState extends State<AuthScreen> {
           _showMessage('Registrasi berhasil! Selamat datang di Mirrora.');
           _goToHome(response.user!);
         } else {
-          _showMessage(
-            'Registrasi berhasil. Silakan cek email jika diminta konfirmasi, lalu login.',
-          );
-          _selectTab(0);
-          _identityController.text = email;
+          // Supabase mengirim email konfirmasi — tampilkan layar khusus
+          setState(() {
+            _awaitingConfirmation = true;
+            _pendingEmail = email;
+          });
         }
       }
     } on AuthException catch (e) {
@@ -267,8 +271,9 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _loginWithBiometrics() async {
-    final enabled = Hive.box('settingsBox')
-        .get('mirrora_biometric_enabled', defaultValue: false) as bool;
+    final enabled = Hive.box(
+      'settingsBox',
+    ).get('mirrora_biometric_enabled', defaultValue: false) as bool;
 
     if (!enabled) {
       _showMessage('Aktifkan fingerprint terlebih dahulu.');
@@ -321,6 +326,31 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   // ────────────────────────────────────────────────────────────
+  // RESEND CONFIRMATION EMAIL
+  // ────────────────────────────────────────────────────────────
+
+  Future<void> _resendConfirmationEmail() async {
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client.auth.resend(
+        type: OtpType.signup,
+        email: _pendingEmail,
+        emailRedirectTo: 'mirrora://login-callback/',
+      );
+      if (!mounted) return;
+      _showMessage('Email konfirmasi dikirim ulang ke $_pendingEmail.');
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      _showMessage(_friendlyAuthError(e.message));
+    } catch (_) {
+      if (!mounted) return;
+      _showMessage('Gagal mengirim ulang email. Periksa koneksi internet.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────
   // WIDGET BUILDERS
   // ────────────────────────────────────────────────────────────
 
@@ -339,6 +369,105 @@ class _AuthScreenState extends State<AuthScreen> {
           color: MirroraTheme.dustyRose,
         ),
       ),
+    );
+  }
+
+  Widget _buildAwaitingConfirmation() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 20),
+        const Icon(
+          Icons.mark_email_unread_outlined,
+          size: 72,
+          color: MirroraTheme.dustyRose,
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Cek Kotak Masuk Email Kamu',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: MirroraTheme.charcoal,
+          ),
+        ),
+        const SizedBox(height: 12),
+        RichText(
+          textAlign: TextAlign.center,
+          text: TextSpan(
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.6,
+              color: MirroraTheme.warmGray,
+            ),
+            children: [
+              const TextSpan(text: 'Kami mengirimkan link konfirmasi ke\n'),
+              TextSpan(
+                text: _pendingEmail,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: MirroraTheme.charcoal,
+                ),
+              ),
+              const TextSpan(
+                text:
+                    '\n\nKlik link tersebut — aplikasi Mirrora akan '
+                    'terbuka otomatis dan kamu langsung masuk.\n\n'
+                    'Tidak perlu login manual lagi setelah konfirmasi.',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+        // Kirim ulang
+        SizedBox(
+          width: double.infinity,
+          height: 51,
+          child: ElevatedButton(
+            onPressed: _isLoading ? null : _resendConfirmationEmail,
+            child: _isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text(
+                    'Kirim Ulang Email',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // Kembali ke login
+        SizedBox(
+          width: double.infinity,
+          height: 49,
+          child: OutlinedButton(
+            onPressed: () {
+              setState(() {
+                _awaitingConfirmation = false;
+                _pendingEmail = '';
+                _selectedTab = 0;
+              });
+              _identityController.clear();
+              _passwordController.clear();
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: MirroraTheme.dustyRose,
+              side: const BorderSide(color: MirroraTheme.blushPink),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(28),
+              ),
+            ),
+            child: const Text(
+              'Kembali ke Login',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+      ],
     );
   }
 
@@ -465,219 +594,228 @@ class _AuthScreenState extends State<AuthScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(child: _buildLogo()),
-                    const SizedBox(height: 4),
-                    Text(
-                      isLogin ? 'Welcome to Mirrora' : 'Create Your Account',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 25,
-                        fontWeight: FontWeight.w700,
-                        color: MirroraTheme.charcoal,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      isLogin
-                          ? 'Masuk dan lanjutkan perjalanan merawat dirimu.'
-                          : 'Mulai perjalanan self-care bersama Mirrora.',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: MirroraTheme.warmGray,
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-
-                    // Tab Login / Register
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: MirroraTheme.cream,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Row(
-                        children: [
-                          _buildTab('Login', 0),
-                          _buildTab('Register', 1),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 23),
-
-                    // Field email / username + email register
-                    if (isLogin) ...[
-                      _buildTextField(
-                        controller: _identityController,
-                        label: 'Email',
-                        hint: 'nama@email.com',
-                        icon: Icons.email_outlined,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: _validateEmail,
-                      ),
-                    ] else ...[
-                      _buildTextField(
-                        controller: _usernameController,
-                        label: 'Username',
-                        hint: 'Buat username',
-                        icon: Icons.person_outline_rounded,
-                        validator: _validateRequired,
-                      ),
-                      const SizedBox(height: 15),
-                      _buildTextField(
-                        controller: _emailController,
-                        label: 'Email',
-                        hint: 'nama@email.com',
-                        icon: Icons.email_outlined,
-                        keyboardType: TextInputType.emailAddress,
-                        validator: _validateEmail,
-                      ),
-                    ],
-
-                    const SizedBox(height: 15),
-
-                    // Password
-                    _buildTextField(
-                      controller: _passwordController,
-                      label: 'Password',
-                      hint: 'Masukkan password',
-                      icon: Icons.lock_outline_rounded,
-                      obscureText: _obscurePassword,
-                      onToggleVisibility: () {
-                        setState(() => _obscurePassword = !_obscurePassword);
-                      },
-                      validator: _validatePassword,
-                      textInputAction:
-                          isLogin ? TextInputAction.done : TextInputAction.next,
-                    ),
-
-                    // Konfirmasi password (register saja)
-                    if (!isLogin) ...[
-                      const SizedBox(height: 15),
-                      _buildTextField(
-                        controller: _confirmPasswordController,
-                        label: 'Konfirmasi Password',
-                        hint: 'Masukkan ulang password',
-                        icon: Icons.lock_reset_rounded,
-                        obscureText: _obscureConfirmPassword,
-                        onToggleVisibility: () {
-                          setState(() => _obscureConfirmPassword =
-                              !_obscureConfirmPassword);
-                        },
-                        validator: _validateConfirmation,
-                        textInputAction: TextInputAction.done,
-                      ),
-                    ],
-
-                    // Opsi bawah field — berbeda antara login & register
-                    if (isLogin) ...[
-                      const SizedBox(height: 5),
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 38,
-                            child: Checkbox(
-                              value: _rememberMe,
-                              activeColor: MirroraTheme.dustyRose,
-                              onChanged: (value) {
-                                setState(() => _rememberMe = value ?? false);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 5),
-                          const Expanded(
-                            child: Text(
-                              'Ingat saya',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: _forgotPassword,
-                            style: TextButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 4),
-                            ),
-                            child: const Text(
-                              'Lupa password?',
-                              style: TextStyle(
-                                color: MirroraTheme.dustyRose,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-
-                    const SizedBox(height: 12),
-
-                    // Tombol Login / Register
-                    SizedBox(
-                      height: 51,
-                      child: ElevatedButton(
-                        onPressed: _isLoading || _isBiometricLoading
-                            ? null
-                            : _submitForm,
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Text(
-                                isLogin ? 'Login' : 'Register',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                ),
-                              ),
-                      ),
-                    ),
-
-                    // Tombol buka dengan sidik jari —
-                    // hanya muncul jika user sudah pernah login di perangkat ini
-                    // dan fitur kunci sidik jari sudah diaktifkan.
-                    if (_showBiometricButton) ...[
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: _isBiometricLoading
-                            ? null
-                            : _loginWithBiometrics,
-                        icon: const Icon(Icons.fingerprint_rounded, size: 25),
-                        label: Text(
-                          _isBiometricLoading
-                              ? 'Memverifikasi...'
-                              : 'Buka Aplikasi dengan Sidik Jari',
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: MirroraTheme.dustyRose,
-                          minimumSize: const Size(double.infinity, 49),
-                          side:
-                              const BorderSide(color: MirroraTheme.blushPink),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(28),
-                          ),
-                        ),
-                      ),
-                    ],
-
-                    const SizedBox(height: 4),
-                    Center(
-                      child: Text(
-                        isLogin
-                            ? 'Lanjutkan perjalanan self-care-mu.'
-                            : 'Satu akun untuk perjalanan self-care-mu.',
+                    if (_awaitingConfirmation)
+                      _buildAwaitingConfirmation()
+                    else ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        isLogin ? 'Welcome to Mirrora' : 'Create Your Account',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
-                          color: MirroraTheme.warmGray,
-                          fontSize: 12,
-                          height: 1.5,
+                          fontSize: 25,
+                          fontWeight: FontWeight.w700,
+                          color: MirroraTheme.charcoal,
                         ),
                       ),
-                    ),
-                    _buildFooter(),
+                      const SizedBox(height: 7),
+                      Text(
+                        isLogin
+                            ? 'Masuk dan lanjutkan perjalanan merawat dirimu.'
+                            : 'Mulai perjalanan self-care bersama Mirrora.',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: MirroraTheme.warmGray,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+
+                      // Tab Login / Register
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: MirroraTheme.cream,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Row(
+                          children: [
+                            _buildTab('Login', 0),
+                            _buildTab('Register', 1),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 23),
+
+                      // Field email / username + email register
+                      if (isLogin) ...[
+                        _buildTextField(
+                          controller: _identityController,
+                          label: 'Email',
+                          hint: 'nama@email.com',
+                          icon: Icons.email_outlined,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: _validateEmail,
+                        ),
+                      ] else ...[
+                        _buildTextField(
+                          controller: _usernameController,
+                          label: 'Username',
+                          hint: 'Buat username',
+                          icon: Icons.person_outline_rounded,
+                          validator: _validateRequired,
+                        ),
+                        const SizedBox(height: 15),
+                        _buildTextField(
+                          controller: _emailController,
+                          label: 'Email',
+                          hint: 'nama@email.com',
+                          icon: Icons.email_outlined,
+                          keyboardType: TextInputType.emailAddress,
+                          validator: _validateEmail,
+                        ),
+                      ],
+
+                      const SizedBox(height: 15),
+
+                      // Password
+                      _buildTextField(
+                        controller: _passwordController,
+                        label: 'Password',
+                        hint: 'Masukkan password',
+                        icon: Icons.lock_outline_rounded,
+                        obscureText: _obscurePassword,
+                        onToggleVisibility: () {
+                          setState(() => _obscurePassword = !_obscurePassword);
+                        },
+                        validator: _validatePassword,
+                        textInputAction: isLogin
+                            ? TextInputAction.done
+                            : TextInputAction.next,
+                      ),
+
+                      // Konfirmasi password (register saja)
+                      if (!isLogin) ...[
+                        const SizedBox(height: 15),
+                        _buildTextField(
+                          controller: _confirmPasswordController,
+                          label: 'Konfirmasi Password',
+                          hint: 'Masukkan ulang password',
+                          icon: Icons.lock_reset_rounded,
+                          obscureText: _obscureConfirmPassword,
+                          onToggleVisibility: () {
+                            setState(
+                              () => _obscureConfirmPassword =
+                                  !_obscureConfirmPassword,
+                            );
+                          },
+                          validator: _validateConfirmation,
+                          textInputAction: TextInputAction.done,
+                        ),
+                      ],
+
+                      // Opsi bawah field — berbeda antara login & register
+                      if (isLogin) ...[
+                        const SizedBox(height: 5),
+                        Row(
+                          children: [
+                            SizedBox(
+                              width: 38,
+                              child: Checkbox(
+                                value: _rememberMe,
+                                activeColor: MirroraTheme.dustyRose,
+                                onChanged: (value) {
+                                  setState(() => _rememberMe = value ?? false);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            const Expanded(
+                              child: Text(
+                                'Ingat saya',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _forgotPassword,
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                              ),
+                              child: const Text(
+                                'Lupa password?',
+                                style: TextStyle(
+                                  color: MirroraTheme.dustyRose,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      const SizedBox(height: 12),
+
+                      // Tombol Login / Register
+                      SizedBox(
+                        height: 51,
+                        child: ElevatedButton(
+                          onPressed: _isLoading || _isBiometricLoading
+                              ? null
+                              : _submitForm,
+                          child: _isLoading
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  isLogin ? 'Login' : 'Register',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                        ),
+                      ),
+
+                      // Tombol buka dengan sidik jari —
+                      // hanya muncul jika user sudah pernah login di perangkat ini
+                      // dan fitur kunci sidik jari sudah diaktifkan.
+                      if (_showBiometricButton) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _isBiometricLoading
+                              ? null
+                              : _loginWithBiometrics,
+                          icon: const Icon(Icons.fingerprint_rounded, size: 25),
+                          label: Text(
+                            _isBiometricLoading
+                                ? 'Memverifikasi...'
+                                : 'Buka Aplikasi dengan Sidik Jari',
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: MirroraTheme.dustyRose,
+                            minimumSize: const Size(double.infinity, 49),
+                            side: const BorderSide(
+                              color: MirroraTheme.blushPink,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(28),
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 4),
+                      Center(
+                        child: Text(
+                          isLogin
+                              ? 'Lanjutkan perjalanan self-care-mu.'
+                              : 'Satu akun untuk perjalanan self-care-mu.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: MirroraTheme.warmGray,
+                            fontSize: 12,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                      _buildFooter(),
+                    ], // end else
                   ],
                 ),
               ),

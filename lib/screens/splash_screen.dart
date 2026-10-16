@@ -18,48 +18,75 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
+  StreamSubscription<AuthState>? _authSub;
+
+  void _navigateBasedOnSession() {
+    if (!mounted) return;
+
+    final user = Supabase.instance.client.auth.currentUser;
+    final settings = Hive.box('settingsBox');
+    final biometricEnabled =
+        settings.get('mirrora_biometric_enabled', defaultValue: false) as bool;
+
+    late final Widget next;
+
+    if (user == null) {
+      next = const OnboardingScreen();
+    } else if (biometricEnabled) {
+      next = BiometricLoginScreen(
+        userName:
+            user.userMetadata?['username'] as String? ??
+            user.email?.split('@').first ??
+            'Mirrora',
+        onUsePassword: (ctx) => Navigator.pushReplacement(
+          ctx,
+          MaterialPageRoute(builder: (_) => const AuthScreen()),
+        ),
+      );
+    } else {
+      next = MainNavigation(
+        userName:
+            user.userMetadata?['username'] as String? ??
+            user.email?.split('@').first ??
+            'Mirrora',
+      );
+    }
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => next),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    Timer(const Duration(seconds: 2), () async {
-      if (!mounted) return;
 
-      final user = Supabase.instance.client.auth.currentUser;
-      final settings = Hive.box('settingsBox');
-      final biometricEnabled =
-          settings.get('mirrora_biometric_enabled', defaultValue: false) as bool;
+    // Listener untuk deep link konfirmasi email — jika Supabase berhasil
+    // menukar token sebelum timer habis, langsung navigasi.
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
+      (data) {
+        if (data.event == AuthChangeEvent.signedIn) {
+          _authSub?.cancel();
+          _navigateBasedOnSession();
+        }
+      },
+    );
 
-      late final Widget next;
-
-      if (user == null) {
-        next = const OnboardingScreen();
-      } else if (biometricEnabled) {
-        next = BiometricLoginScreen(
-          userName:
-              user.userMetadata?['username'] as String? ??
-              user.email?.split('@').first ??
-              'Mirrora',
-          onUsePassword: (ctx) => Navigator.pushReplacement(
-            ctx,
-            MaterialPageRoute(builder: (_) => const AuthScreen()),
-          ),
-        );
-      } else {
-        next = MainNavigation(
-          userName:
-              user.userMetadata?['username'] as String? ??
-              user.email?.split('@').first ??
-              'Mirrora',
-        );
-      }
-
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => next),
-      );
+    // Timer fallback 2 detik — berjalan bersamaan dengan listener di atas.
+    Timer(const Duration(seconds: 2), () {
+      _authSub?.cancel();
+      _navigateBasedOnSession();
     });
   }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
 
   @override
   Widget build(BuildContext context) {
