@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:local_auth/local_auth.dart';
@@ -38,6 +40,9 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _awaitingConfirmation = false;
   String _pendingEmail = '';
 
+  // Listener perubahan auth — untuk mendeteksi konfirmasi email via deep link
+  StreamSubscription<AuthState>? _authSub;
+
   bool get isLogin => _selectedTab == 0;
 
   /// Tombol sidik jari hanya tampil jika:
@@ -55,10 +60,14 @@ class _AuthScreenState extends State<AuthScreen> {
   void initState() {
     super.initState();
     _loadStatus();
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
+      _onAuthStateChanged,
+    );
   }
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _identityController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
@@ -81,6 +90,86 @@ class _AuthScreenState extends State<AuthScreen> {
       _biometricEnabled = enabled;
       _hasActiveSession = hasSession;
     });
+  }
+
+  // Dipanggil setiap kali status auth Supabase berubah.
+  // Saat user klik link konfirmasi → supabase_flutter fire AuthChangeEvent.signedIn
+  // → kita tampilkan dialog sukses lalu navigasi ke home.
+  void _onAuthStateChanged(AuthState state) {
+    if (!mounted) return;
+    if (state.event == AuthChangeEvent.signedIn && _awaitingConfirmation) {
+      final user = state.session?.user;
+      if (user == null) return;
+      _authSub?.cancel();
+      _showEmailConfirmedDialog(user);
+    }
+  }
+
+  Future<void> _showEmailConfirmedDialog(User user) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: MirroraTheme.white,
+        contentPadding: const EdgeInsets.fromLTRB(28, 28, 28, 20),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Ikon centang
+            Container(
+              width: 68,
+              height: 68,
+              decoration: const BoxDecoration(
+                color: MirroraTheme.blushPink,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: MirroraTheme.dustyRose,
+                size: 38,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Email Terkonfirmasi! 🎉',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: MirroraTheme.charcoal,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Akunmu sudah aktif dan siap digunakan.\nKamu sekarang masuk ke Mirrora.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.6,
+                color: MirroraTheme.warmGray,
+              ),
+            ),
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx); // tutup dialog
+                  _goToHome(user);
+                },
+                child: const Text(
+                  'Mulai Mirrora',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showMessage(String message) {
