@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../theme/mirrora_theme.dart';
+import 'bubble_pop_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key, this.userName = 'Sarah'});
@@ -230,7 +231,10 @@ class _HomeScreenState extends State<HomeScreen> {
           child: _QuickAccessCard(
             icon: Icons.sports_esports_outlined,
             label: 'Mini Game',
-            onTap: () => _comingSoon('Mini Game'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BubblePopScreen()),
+            ),
           ),
         ),
         const SizedBox(width: 12),
