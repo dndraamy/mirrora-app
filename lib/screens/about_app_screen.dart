@@ -37,7 +37,7 @@ class AboutScreen extends StatelessWidget {
                       width: 190,
                       height: 90,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Text(
+                      errorBuilder: (_, _, _) => const Text(
                         'Mirrora',
                         style: TextStyle(
                           fontSize: 34,

@@ -27,9 +27,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _load() {
-    final enabled =
-        Hive.box('settingsBox').get(_biometricHiveKey, defaultValue: false)
-            as bool;
+    final enabled = Hive.box(
+      'settingsBox',
+    ).get(_biometricHiveKey, defaultValue: false) as bool;
     if (!mounted) return;
     setState(() => _biometricOn = enabled);
   }
@@ -59,43 +59,147 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       if (enable) {
-        final canCheck = await _localAuth.canCheckBiometrics;
+        // Cek apakah hardware biometrik tersedia di perangkat ini.
         final isSupported = await _localAuth.isDeviceSupported();
+        if (!isSupported) {
+          _showErrorDialog(
+            judul: 'Perangkat Tidak Didukung',
+            pesan:
+                'Perangkat ini tidak memiliki sensor sidik jari atau wajah. '
+                'Fitur kunci sidik jari tidak dapat digunakan.',
+          );
+          return;
+        }
 
-        if (!canCheck || !isSupported) {
-          _showMessage('Perangkat belum mendukung autentikasi biometrik.');
+        // Cek apakah ada sidik jari / wajah yang sudah terdaftar di HP.
+        final canCheck = await _localAuth.canCheckBiometrics;
+        if (!canCheck) {
+          _showErrorDialog(
+            judul: 'Sidik Jari Belum Terdaftar',
+            pesan:
+                'Kamu belum mendaftarkan sidik jari di pengaturan perangkat ini.\n\n'
+                'Buka Pengaturan → Keamanan → Sidik Jari, '
+                'tambahkan sidik jari, lalu kembali ke sini untuk mengaktifkan fitur ini.',
+          );
           return;
         }
 
         // Verifikasi sidik jari dulu sebelum fitur diaktifkan.
         final authenticated = await _localAuth.authenticate(
-          localizedReason: 'Verifikasi sidik jari untuk mengaktifkan login',
+          localizedReason:
+              'Verifikasi sidik jari untuk mengaktifkan kunci aplikasi',
           biometricOnly: true,
           persistAcrossBackgrounding: true,
         );
 
         if (!authenticated) {
-          _showMessage('Verifikasi dibatalkan. Login biometric belum aktif.');
+          _showMessage('Verifikasi dibatalkan. Kunci sidik jari belum aktif.');
           return;
         }
 
         await Hive.box('settingsBox').put(_biometricHiveKey, true);
         if (!mounted) return;
         setState(() => _biometricOn = true);
-        _showMessage('Login biometric diaktifkan.');
+        _showMessage('Kunci sidik jari diaktifkan.');
       } else {
         await Hive.box('settingsBox').put(_biometricHiveKey, false);
         if (!mounted) return;
         setState(() => _biometricOn = false);
-        _showMessage('Login biometric dinonaktifkan.');
+        _showMessage('Kunci sidik jari dinonaktifkan.');
       }
     } on LocalAuthException catch (e) {
-      _showMessage('Fingerprint tidak dapat digunakan: ${e.code.name}');
+      final pesan = _pesanDariKodeError(e.code);
+      // Pesan kosong artinya user yang membatalkan — tidak perlu dialog.
+      if (pesan.isNotEmpty) {
+        _showErrorDialog(judul: 'Tidak Dapat Menggunakan Sidik Jari', pesan: pesan);
+      }
     } catch (e) {
       debugPrint('Biometric toggle error: $e');
-      _showMessage('Terjadi kesalahan: $e');
+      _showMessage('Terjadi kesalahan tak terduga. Coba lagi.');
     } finally {
       if (mounted) setState(() => _isBusy = false);
+    }
+  }
+
+  /// Menampilkan dialog error yang tidak bisa diabaikan begitu saja,
+  /// cocok untuk kondisi yang butuh tindakan dari user.
+  void _showErrorDialog({required String judul, required String pesan}) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.fingerprint_rounded, color: MirroraTheme.dustyRose),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                judul,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: MirroraTheme.charcoal,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          pesan,
+          style: const TextStyle(
+            fontSize: 14,
+            height: 1.6,
+            color: MirroraTheme.warmGray,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              'Mengerti',
+              style: TextStyle(
+                color: MirroraTheme.dustyRose,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Memetakan kode error LocalAuthException ke pesan yang mudah dipahami.
+  String _pesanDariKodeError(LocalAuthExceptionCode code) {
+    switch (code) {
+      case LocalAuthExceptionCode.noBiometricHardware:
+        return 'Perangkat ini tidak memiliki sensor sidik jari atau wajah. '
+            'Fitur kunci sidik jari tidak dapat digunakan.';
+      case LocalAuthExceptionCode.noBiometricsEnrolled:
+        return 'Belum ada sidik jari atau wajah yang terdaftar di perangkat ini.\n\n'
+            'Buka Pengaturan → Keamanan → Sidik Jari, lalu tambahkan sidik jari kamu.';
+      case LocalAuthExceptionCode.noCredentialsSet:
+        return 'Perangkat belum memiliki kunci layar (PIN, pola, atau sidik jari) '
+            'yang dikonfigurasi.\n\nAktifkan kunci layar di Pengaturan terlebih dahulu.';
+      case LocalAuthExceptionCode.temporaryLockout:
+        return 'Terlalu banyak percobaan yang gagal. '
+            'Autentikasi sidik jari dikunci sementara.\n\n'
+            'Tunggu beberapa saat, lalu coba lagi.';
+      case LocalAuthExceptionCode.biometricLockout:
+        return 'Sidik jari dikunci karena terlalu banyak percobaan gagal.\n\n'
+            'Buka kunci perangkat menggunakan PIN atau pola terlebih dahulu, '
+            'lalu coba lagi.';
+      case LocalAuthExceptionCode.biometricHardwareTemporarilyUnavailable:
+        return 'Sensor sidik jari sedang tidak tersedia sementara. '
+            'Coba lagi dalam beberapa saat.';
+      case LocalAuthExceptionCode.userCanceled:
+      case LocalAuthExceptionCode.systemCanceled:
+      case LocalAuthExceptionCode.timeout:
+        // Dibatalkan user atau sistem — tidak perlu dialog.
+        return '';
+      default:
+        return 'Terjadi masalah saat mengakses sidik jari. '
+            'Pastikan sidik jari sudah terdaftar dan coba lagi.';
     }
   }
 
@@ -148,9 +252,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _SettingTile(
                   icon: Icons.fingerprint_rounded,
-                  title: 'Login Biometric',
+                  title: 'Kunci Sidik Jari',
                   subtitle: _biometricOn
-                      ? 'Aktif - masuk dengan sidik jari'
+                      ? 'Aktif — sidik jari diperlukan saat membuka app'
                       : 'Nonaktif',
                   trailing: Switch(
                     value: _biometricOn,
@@ -172,9 +276,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Padding(
               padding: EdgeInsets.fromLTRB(6, 10, 6, 0),
               child: Text(
-                'Saat aktif, kamu bisa masuk ke Mirrora memakai sidik jari '
-                'tanpa mengetik password. Sidik jari yang dipakai adalah '
-                'yang terdaftar di perangkatmu.',
+                'Saat aktif, kamu akan diminta verifikasi sidik jari '
+                'setiap kali membuka aplikasi Mirrora untuk '
+                'menjaga keamanan akunmu. ',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.5,
