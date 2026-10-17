@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/product_model.dart';
 import '../services/beauty_api_service.dart';
+import '../services/currency_service.dart';
 import '../theme/mirrora_theme.dart';
 import 'ai_assistant_screen.dart';
 
@@ -15,11 +16,13 @@ class ExploreScreen extends StatefulWidget {
 
 class _ExploreScreenState extends State<ExploreScreen> {
   final BeautyApiService _apiService = BeautyApiService();
+  final CurrencyService _currencyService = CurrencyService();
   final TextEditingController _searchController = TextEditingController();
 
   ProductOrigin _selectedOrigin = ProductOrigin.all;
   String _selectedCategory = 'Semua';
   ProductSort _selectedSort = ProductSort.popular;
+  late AppCurrency _currentCurrency;
   bool _isGridView = true;
 
   bool _isLoading = true;
@@ -29,6 +32,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   void initState() {
     super.initState();
+    _currentCurrency = _currencyService.detectUserCurrency();
     _loadCatalog();
   }
 
@@ -157,6 +161,117 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  void _showCurrencyPickerSheet() {
+    final detected = _currencyService.detectUserCurrency();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: MirroraTheme.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: MirroraTheme.blushPink,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  const Text(
+                    'Pilih Mata Uang Katalog',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: MirroraTheme.charcoal,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: MirroraTheme.cream,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: MirroraTheme.blushPink),
+                    ),
+                    child: Text(
+                      'Default: ${detected.flag} ${detected.code}',
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: MirroraTheme.dustyRose),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Harga produk akan otomatis dikonversi sesuai mata uang yang Anda pilih.',
+                style: TextStyle(fontSize: 12.5, color: MirroraTheme.warmGray),
+              ),
+              const SizedBox(height: 14),
+              ...AppCurrency.values.map((curr) {
+                final isSelected = _currentCurrency == curr;
+                final isDetected = detected == curr;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: Text(curr.flag, style: const TextStyle(fontSize: 24)),
+                  title: Row(
+                    children: [
+                      Text(
+                        '${curr.code} (${curr.symbol})',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                          color: isSelected ? MirroraTheme.dustyRose : MirroraTheme.charcoal,
+                        ),
+                      ),
+                      if (isDetected) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEAF5EE),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'Wilayah Anda',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Color(0xFF2E6F3E)),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  subtitle: Text(
+                    curr.name,
+                    style: const TextStyle(fontSize: 12, color: MirroraTheme.warmGray),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle_rounded, color: MirroraTheme.dustyRose)
+                      : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _currentCurrency = curr);
+                  },
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   void _showProductDetails(CatalogProduct product) {
     showModalBottomSheet(
       context: context,
@@ -164,11 +279,15 @@ class _ExploreScreenState extends State<ExploreScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final isFav = _favoriteProductIds.contains(product.id);
-        return DraggableScrollableSheet(
-          initialChildSize: 0.85,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (_, scrollController) {
+        AppCurrency selectedCurrency = _currentCurrency;
+        bool isCurrencyExpanded = false;
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              builder: (_, scrollController) {
             return Container(
               decoration: const BoxDecoration(
                 color: MirroraTheme.white,
@@ -341,28 +460,285 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Price
+                  // Price & Currency Converter Section
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
                       color: MirroraTheme.cream,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: MirroraTheme.blushPink),
                     ),
-                    child: Row(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Harga Estimasi:',
-                          style: TextStyle(fontSize: 13, color: MirroraTheme.warmGray),
+                        // Header bar: Label & selected currency tag
+                        Row(
+                          children: [
+                            const Text(
+                              'Harga & Konversi Mata Uang',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: MirroraTheme.charcoal),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: MirroraTheme.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: MirroraTheme.blushPink),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(selectedCurrency.flag, style: const TextStyle(fontSize: 12)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    selectedCurrency.code,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: MirroraTheme.charcoal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const Spacer(),
-                        Text(
-                          product.formattedPrice,
-                          style: const TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: MirroraTheme.dustyRose,
+                        const SizedBox(height: 6),
+
+                        // Prominent converted price
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
+                              child: Text(
+                                _currencyService.formatPrice(product.price, selectedCurrency),
+                                key: ValueKey(selectedCurrency),
+                                style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  color: MirroraTheme.dustyRose,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (selectedCurrency != AppCurrency.idr)
+                              Text(
+                                '(≈ ${_currencyService.formatPrice(product.price, AppCurrency.idr)})',
+                                style: const TextStyle(fontSize: 12, color: MirroraTheme.warmGray, fontWeight: FontWeight.w500),
+                              ),
+                          ],
+                        ),
+
+                        // Exchange rate info
+                        if (selectedCurrency != AppCurrency.idr) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Kurs estimasi: ${_currencyService.getExchangeRateInfo(selectedCurrency)}',
+                            style: const TextStyle(fontSize: 11, color: MirroraTheme.warmGray, fontStyle: FontStyle.italic),
                           ),
+                        ],
+
+                        const SizedBox(height: 10),
+
+                        // Dropdown toggle button for "Lihat dalam mata uang lain"
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              setSheetState(() {
+                                isCurrencyExpanded = !isCurrencyExpanded;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: MirroraTheme.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isCurrencyExpanded
+                                      ? MirroraTheme.dustyRose.withValues(alpha: 0.5)
+                                      : MirroraTheme.blushPink,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      color: MirroraTheme.cream,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.currency_exchange_rounded,
+                                      size: 15,
+                                      color: MirroraTheme.dustyRose,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    'Lihat dalam mata uang lain',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: MirroraTheme.charcoal,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isCurrencyExpanded
+                                          ? MirroraTheme.dustyRose.withValues(alpha: 0.12)
+                                          : MirroraTheme.cream,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          isCurrencyExpanded ? 'Tutup' : 'Pilih',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: MirroraTheme.dustyRose,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Icon(
+                                          isCurrencyExpanded
+                                              ? Icons.keyboard_arrow_up_rounded
+                                              : Icons.keyboard_arrow_down_rounded,
+                                          size: 16,
+                                          color: MirroraTheme.dustyRose,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Expandable Content
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox.shrink(),
+                          secondChild: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Pilih Mata Uang Konversi:',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: MirroraTheme.charcoal,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: AppCurrency.values.map((c) {
+                                    final isSelected = selectedCurrency == c;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: 6),
+                                      child: InkWell(
+                                        onTap: () => setSheetState(() => selectedCurrency = c),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(milliseconds: 200),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: isSelected ? MirroraTheme.dustyRose : MirroraTheme.white,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: isSelected ? MirroraTheme.dustyRose : MirroraTheme.blushPink,
+                                            ),
+                                            boxShadow: isSelected
+                                                ? [
+                                                    BoxShadow(
+                                                      color: MirroraTheme.dustyRose.withValues(alpha: 0.24),
+                                                      blurRadius: 6,
+                                                      offset: const Offset(0, 2),
+                                                    ),
+                                                  ]
+                                                : null,
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(c.flag, style: const TextStyle(fontSize: 13)),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                c.code,
+                                                style: TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                                  color: isSelected ? MirroraTheme.white : MirroraTheme.charcoal,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+
+                              // Multi-currency all-at-a-glance comparison box
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: MirroraTheme.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: MirroraTheme.blushPink.withValues(alpha: 0.6)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Row(
+                                      children: [
+                                        Icon(Icons.currency_exchange_rounded, size: 14, color: MirroraTheme.dustyRose),
+                                        SizedBox(width: 5),
+                                        Text(
+                                          'Semua Konversi Kurs:',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: MirroraTheme.charcoal),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: AppCurrency.values.map((c) {
+                                        final val = _currencyService.formatPrice(product.price, c);
+                                        final isCurrent = selectedCurrency == c;
+                                        return Text(
+                                          '${c.flag} ${c.code}: $val',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w500,
+                                            color: isCurrent ? MirroraTheme.dustyRose : MirroraTheme.charcoal,
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          crossFadeState: isCurrencyExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 250),
                         ),
                       ],
                     ),
@@ -513,6 +889,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 ],
               ),
             );
+          },
+        );
           },
         );
       },
@@ -828,6 +1206,36 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         ),
                       ),
                       const Spacer(),
+                      // Currency Selector Button
+                      InkWell(
+                        onTap: _showCurrencyPickerSheet,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: MirroraTheme.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: MirroraTheme.blushPink),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(_currentCurrency.flag, style: const TextStyle(fontSize: 13)),
+                              const SizedBox(width: 4),
+                              Text(
+                                _currentCurrency.code,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: MirroraTheme.charcoal,
+                                ),
+                              ),
+                              const Icon(Icons.arrow_drop_down_rounded, size: 18, color: MirroraTheme.warmGray),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       // Sort Button
                       InkWell(
                         onTap: _showSortBottomSheet,
@@ -1202,7 +1610,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        product.formattedPrice,
+                        _currencyService.formatPrice(product.price, _currentCurrency),
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
@@ -1326,7 +1734,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                product.formattedPrice,
+                                _currencyService.formatPrice(product.price, _currentCurrency),
                                 style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w800,
