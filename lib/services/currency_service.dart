@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 /// Mata uang yang didukung untuk konversi di katalog Mirrora
 enum AppCurrency {
@@ -30,6 +31,8 @@ class CurrencyService {
   factory CurrencyService() => _instance;
   CurrencyService._internal();
 
+  static const String _savedCurrencyKey = 'selected_currency_code';
+
   /// Kurs per 1 unit mata uang asing ke IDR (Rupiah)
   /// Nilai estimasi kurs pasar riil
   static const Map<AppCurrency, double> ratesToIdr = {
@@ -42,35 +45,81 @@ class CurrencyService {
 
   /// Mendeteksi mata uang default secara otomatis berdasarkan wilayah/perangkat user
   AppCurrency detectUserCurrency() {
+    // 1. Cek apakah user pernah secara manual memilih mata uang di settings/explore
     try {
+      if (Hive.isBoxOpen('settingsBox')) {
+        final savedCode = Hive.box('settingsBox').get(_savedCurrencyKey) as String?;
+        if (savedCode != null) {
+          for (final c in AppCurrency.values) {
+            if (c.code == savedCode) return c;
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 2. Deteksi otomatis berdasarkan zona waktu & locale
+    try {
+      final now = DateTime.now();
+      final offsetHours = now.timeZoneOffset.inHours;
+      final tzName = now.timeZoneName.toLowerCase();
+
       final locale = PlatformDispatcher.instance.locale;
       final country = locale.countryCode?.toUpperCase() ?? '';
       final language = locale.languageCode.toLowerCase();
 
-      // Cek berdasarkan negara
-      if (country == 'ID' || language == 'id') {
+      // PRIORITAS UTAMA: Wilayah Indonesia
+      // Seringkali HP di Indonesia diatur sistem bahasanya ke English (United States),
+      // sehingga locale.countryCode menjadi 'US'. Namun zona waktu HP tetap WIB/WITA/WIT (+7/+8/+9).
+      final isIndonesianTz = offsetHours == 7 ||
+          offsetHours == 8 ||
+          offsetHours == 9 ||
+          tzName.contains('wib') ||
+          tzName.contains('wita') ||
+          tzName.contains('wit') ||
+          tzName.contains('jakarta') ||
+          tzName.contains('se asia') ||
+          tzName.contains('ict');
+
+      if (isIndonesianTz || country == 'ID' || language == 'id') {
         return AppCurrency.idr;
-      } else if (country == 'US') {
-        return AppCurrency.usd;
-      } else if (country == 'JP' || language == 'ja') {
+      }
+
+      // Deteksi Jepang (JST UTC+9 dan bahasa ja/JP)
+      if (country == 'JP' || language == 'ja' || (offsetHours == 9 && tzName.contains('jst'))) {
         return AppCurrency.jpy;
-      } else if (country == 'KR' || language == 'ko') {
+      }
+
+      // Deteksi Korea (KST UTC+9 dan bahasa ko/KR)
+      if (country == 'KR' || language == 'ko' || (offsetHours == 9 && tzName.contains('kst'))) {
         return AppCurrency.krw;
-      } else if (['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'PT', 'IE', 'FI', 'GR'].contains(country)) {
+      }
+
+      // Deteksi Uni Eropa
+      if (['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'PT', 'IE', 'FI', 'GR'].contains(country)) {
         return AppCurrency.eur;
       }
 
-      // Deteksi tambahan berdasarkan zona waktu jika country code tidak tersedia
-      final offsetHours = DateTime.now().timeZoneOffset.inHours;
-      if (offsetHours == 7 || offsetHours == 8 || offsetHours == 9) {
-        // WIB (GMT+7), WITA (GMT+8), WIT (GMT+9)
-        return AppCurrency.idr;
+      // Deteksi Amerika Serikat:
+      // HANYA jika country == 'US' DAN zona waktu benar-benar di benua Amerika (UTC-4 s.d UTC-11).
+      // Jangan pernah default ke USD jika zona waktu user berada di Asia/Indonesia (+7/+8/+9).
+      if (country == 'US' && (offsetHours <= -4 && offsetHours >= -11)) {
+        return AppCurrency.usd;
       }
     } catch (_) {
       // Abaikan error dan gunakan default IDR
     }
 
+    // Default mutlak aplikasi Mirrora adalah Rupiah (Indonesia)
     return AppCurrency.idr;
+  }
+
+  /// Simpan preferensi mata uang yang dipilih user
+  Future<void> saveUserCurrency(AppCurrency currency) async {
+    try {
+      if (Hive.isBoxOpen('settingsBox')) {
+        await Hive.box('settingsBox').put(_savedCurrencyKey, currency.code);
+      }
+    } catch (_) {}
   }
 
   /// Mengonversi nilai dari IDR ke mata uang target

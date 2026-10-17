@@ -261,6 +261,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       : null,
                   onTap: () {
                     Navigator.pop(ctx);
+                    _currencyService.saveUserCurrency(curr);
                     setState(() => _currentCurrency = curr);
                   },
                 );
