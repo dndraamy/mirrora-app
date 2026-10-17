@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/mirrora_bottom_nav.dart';
 import 'ai_assistant_screen.dart';
+import 'explore_screen.dart';
 import 'home_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
@@ -28,10 +29,9 @@ class _MainNavigationState extends State<MainNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    // Tab selain Home dan Profil masih placeholder, ganti saat fiturnya dibuat.
     final screens = <Widget>[
       HomeScreen(userName: _userName),
-      const _PlaceholderTab(title: 'Explore', icon: Icons.explore_rounded),
+      const ExploreScreen(),
       AiAssistantScreen(userName: _userName),
       ProfileScreen(
         userName: _userName,
@@ -47,49 +47,6 @@ class _MainNavigationState extends State<MainNavigation> {
       bottomNavigationBar: MirroraBottomNav(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
-      ),
-    );
-  }
-}
-
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.title, required this.icon});
-
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: const BoxDecoration(
-                color: MirroraTheme.blushPink,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 44, color: MirroraTheme.dustyRose),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: MirroraTheme.charcoal,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Segera hadir',
-              style: TextStyle(fontSize: 13, color: MirroraTheme.warmGray),
-            ),
-          ],
-        ),
       ),
     );
   }
