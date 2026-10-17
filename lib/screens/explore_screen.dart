@@ -253,7 +253,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     ],
                   ),
                   subtitle: Text(
-                    curr.name,
+                    curr == _currentCurrency
+                        ? '${curr.name} • Mata uang wilayah Anda'
+                        : '${curr.name} (${_currencyService.getExchangeRateBetween(_currentCurrency, curr)})',
                     style: const TextStyle(fontSize: 12, color: MirroraTheme.warmGray),
                   ),
                   trailing: isSelected
@@ -476,7 +478,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         Row(
                           children: [
                             const Text(
-                              'Harga & Konversi Mata Uang',
+                              'Harga Produk',
                               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: MirroraTheme.charcoal),
                             ),
                             const Spacer(),
@@ -527,20 +529,40 @@ class _ExploreScreenState extends State<ExploreScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            if (selectedCurrency != AppCurrency.idr)
+                            if (selectedCurrency != _currentCurrency)
                               Text(
-                                '(≈ ${_currencyService.formatPrice(product.price, AppCurrency.idr)})',
+                                '(≈ ${_currencyService.formatPrice(product.price, _currentCurrency)})',
                                 style: const TextStyle(fontSize: 12, color: MirroraTheme.warmGray, fontWeight: FontWeight.w500),
                               ),
                           ],
                         ),
 
-                        // Exchange rate info
-                        if (selectedCurrency != AppCurrency.idr) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'Kurs estimasi: ${_currencyService.getExchangeRateInfo(selectedCurrency)}',
-                            style: const TextStyle(fontSize: 11, color: MirroraTheme.warmGray, fontStyle: FontStyle.italic),
+                        // Exchange rate info (dinamis antar wilayah user & mata uang target)
+                        if (selectedCurrency != _currentCurrency) ...[
+                          const SizedBox(height: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: MirroraTheme.cream,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: MirroraTheme.blushPink),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.info_outline_rounded, size: 13, color: MirroraTheme.dustyRose),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Kurs estimasi: ${_currencyService.getExchangeRateBetween(_currentCurrency, selectedCurrency)}',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: MirroraTheme.charcoal,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
 
@@ -706,13 +728,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Row(
+                                    Row(
                                       children: [
-                                        Icon(Icons.currency_exchange_rounded, size: 14, color: MirroraTheme.dustyRose),
-                                        SizedBox(width: 5),
+                                        const Icon(Icons.currency_exchange_rounded, size: 14, color: MirroraTheme.dustyRose),
+                                        const SizedBox(width: 5),
                                         Text(
-                                          'Semua Konversi Kurs:',
-                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: MirroraTheme.charcoal),
+                                          'Semua Konversi (Wilayah Anda: ${_currentCurrency.code}):',
+                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: MirroraTheme.charcoal),
                                         ),
                                       ],
                                     ),
@@ -733,6 +755,20 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                         );
                                       }).toList(),
                                     ),
+                                    if (selectedCurrency != _currentCurrency) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: MirroraTheme.cream,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          'Kurs Relatif: ${_currencyService.getExchangeRateBetween(_currentCurrency, selectedCurrency)}',
+                                          style: const TextStyle(fontSize: 10.5, color: MirroraTheme.charcoal, fontWeight: FontWeight.w500),
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),

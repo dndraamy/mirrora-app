@@ -154,12 +154,73 @@ class CurrencyService {
     }
   }
 
+  /// Menghitung kurs nilai tukar antara dua mata uang apa pun (from -> to).
+  /// 1 unit [from] = X unit [to].
+  double getRate(AppCurrency from, AppCurrency to) {
+    if (from == to) return 1.0;
+    final fromToIdr = ratesToIdr[from] ?? 1.0;
+    final toToIdr = ratesToIdr[to] ?? 1.0;
+    return fromToIdr / toToIdr;
+  }
+
+  /// Format kurs tukar dua arah yang dinamis antara mata uang asal (base) dan target.
+  /// Contoh:
+  /// - Base USD -> Target JPY: "1 USD ≈ ¥150 JPY • 1 JPY ≈ $0.0067 USD"
+  /// - Base IDR -> Target USD: "1 USD ≈ Rp 16.200 • Rp 10.000 ≈ $0.62 USD"
+  /// - Base EUR -> Target JPY: "1 EUR ≈ ¥163 JPY • 100 JPY ≈ €0.61 EUR"
+  String getExchangeRateBetween(AppCurrency base, AppCurrency target) {
+    if (base == target) {
+      return 'Mata uang default wilayahmu (${base.name})';
+    }
+
+    // A. Jika salah satunya adalah IDR
+    if (base == AppCurrency.idr) {
+      final rate = ratesToIdr[target] ?? 1.0;
+      final rateStr = _formatWithSeparator(rate.round(), '.');
+      final tenThousandVal = (10000.0 / rate);
+      final tenThousandStr = tenThousandVal >= 1
+          ? tenThousandVal.toStringAsFixed(1)
+          : tenThousandVal.toStringAsFixed(2);
+      return '1 ${target.code} ≈ Rp $rateStr • Rp 10.000 ≈ ${target.symbol}$tenThousandStr ${target.code}';
+    }
+
+    if (target == AppCurrency.idr) {
+      final rate = ratesToIdr[base] ?? 1.0;
+      final rateStr = _formatWithSeparator(rate.round(), '.');
+      final tenThousandVal = (10000.0 / rate);
+      final tenThousandStr = tenThousandVal >= 1
+          ? tenThousandVal.toStringAsFixed(1)
+          : tenThousandVal.toStringAsFixed(2);
+      return '1 ${base.code} ≈ Rp $rateStr • Rp 10.000 ≈ ${base.symbol}$tenThousandStr ${base.code}';
+    }
+
+    // B. Antar mata uang non-IDR (contoh: USD ke JPY, USD ke EUR, EUR ke JPY, dsb.)
+    final rateBaseToTarget = getRate(base, target);
+    final rateTargetToBase = getRate(target, base);
+
+    final strBaseToTarget = _formatRatePair(1.0, base, rateBaseToTarget, target);
+    final strTargetToBase = _formatRatePair(1.0, target, rateTargetToBase, base);
+
+    return '$strBaseToTarget • $strTargetToBase';
+  }
+
+  String _formatRatePair(double unitFrom, AppCurrency from, double rateTo, AppCurrency to) {
+    String formattedTo;
+    if (rateTo >= 100) {
+      formattedTo = _formatWithSeparator(rateTo.round(), to == AppCurrency.idr ? '.' : ',');
+    } else if (rateTo >= 1) {
+      formattedTo = rateTo.toStringAsFixed(2);
+    } else if (rateTo >= 0.01) {
+      formattedTo = rateTo.toStringAsFixed(3);
+    } else {
+      formattedTo = rateTo.toStringAsFixed(4);
+    }
+    return '${unitFrom.round()} ${from.code} ≈ ${to.symbol}$formattedTo ${to.code}';
+  }
+
   /// Format kurs tukar untuk teks info (cth: "1 USD ≈ Rp 16.200")
   String getExchangeRateInfo(AppCurrency currency) {
-    if (currency == AppCurrency.idr) return 'Mata uang dasar (Indonesia)';
-    final rate = ratesToIdr[currency] ?? 1.0;
-    final formattedRate = _formatWithSeparator(rate.round(), '.');
-    return '1 ${currency.code} ≈ Rp $formattedRate';
+    return getExchangeRateBetween(AppCurrency.idr, currency);
   }
 
   static String _formatWithSeparator(int number, String separator) {
