@@ -2,22 +2,18 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:local_auth/local_auth.dart';
 
 import '../screens/admin_giveaway_screen.dart';
 import '../theme/mirrora_theme.dart';
 
 /// Layanan Keamanan untuk Portal Admin / Owner Mirrora
 /// Fitur:
-/// 1. Autentikasi Biometrik (Sidik Jari / Face Unlock perangkat)
-/// 2. Master Key dengan Kriptografi Hash SHA-256 + Salt (Dapat diganti oleh Owner)
-/// 3. Mode Stealth: Opsi sembunyikan tombol dari menu publik
+/// 1. Master Key dengan Kriptografi Hash SHA-256 + Salt (Dapat diganti oleh Owner)
+/// 2. Mode Stealth: Opsi sembunyikan tombol dari menu publik
 class AdminAuthService {
   static final AdminAuthService _instance = AdminAuthService._internal();
   factory AdminAuthService() => _instance;
   AdminAuthService._internal();
-
-  final LocalAuthentication _localAuth = LocalAuthentication();
 
   static const String _boxName = 'settingsBox';
   static const String _customPasswordHashKey = 'admin_master_password_hash';
@@ -78,48 +74,8 @@ class AdminAuthService {
     await box.put(_customPasswordSaltKey, salt);
   }
 
-  /// Cek dukungan hardware biometrik di perangkat
-  Future<bool> canUseBiometrics() async {
-    try {
-      final isSupported = await _localAuth.isDeviceSupported();
-      final canCheck = await _localAuth.canCheckBiometrics;
-      return isSupported && canCheck;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Menjalankan verifikasi biometrik
-  Future<bool> authenticateBiometric() async {
-    try {
-      return await _localAuth.authenticate(
-        localizedReason: 'Pindai sidik jari atau wajah Owner untuk akses Admin Portal',
-        biometricOnly: true,
-        persistAcrossBackgrounding: true,
-      );
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Alur Keamanan: Biometrik -> Master Passphrase
-  Future<void> authenticateAndOpenPortal(BuildContext context) async {
-    // 1. Cek apakah biometrik tersedia. Jika ya, coba jalankan terlebih dahulu
-    final hasBiometrics = await canUseBiometrics();
-    if (!context.mounted) return;
-
-    if (hasBiometrics) {
-      final biometricSuccess = await authenticateBiometric();
-      if (!context.mounted) return;
-
-      if (biometricSuccess) {
-        _openScreen(context);
-        return;
-      }
-    }
-
-    // 2. Jika biometrik tidak tersedia atau dibatalkan, tampilkan dialog Master Passphrase
-    if (!context.mounted) return;
+  /// Alur Keamanan: Langsung meminta Master Passphrase Owner
+  void authenticateAndOpenPortal(BuildContext context) {
     _showMasterKeyDialog(context);
   }
 

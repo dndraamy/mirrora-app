@@ -7,7 +7,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../data/beauty_products.dart';
+import '../services/giveaway_service.dart';
 import '../theme/mirrora_theme.dart';
 
 // ─── Hive keys (per-user, prefix dengan user ID) ────────────────────────────
@@ -18,15 +18,15 @@ String _kCountInWindow(String uid)  => 'shake_count_in_window_$uid';
 
 // ─── Rate limit ─────────────────────────────────────────────────────────────
 const int _maxShakesPerWindow = 3;
-const Duration _windowDuration = Duration(hours: 4);
+const Duration _windowDuration = Duration(hours: 24);
 
 // ─── Shake parameters ───────────────────────────────────────────────────────
 const double _shakeThreshold = 16.0; // m/s² minimum untuk register shake
 const double _energyPerShake = 0.145; // energi per shake event (butuh ~7 shake kuat)
 const double _energyDecayRate = 0.09; // energi hilang per detik jika tidak shake
 
-// ─── Rare drop ──────────────────────────────────────────────────────────────
-const double _rareProbability = 0.08;
+// ─── Peluang Dapat Tiket Undian (Gacha Berimbang: ~48% Dapat Tiket, ~52% Zonk) ───
+const double _ticketWinRate = 0.48;
 
 // ─── Warna petal ────────────────────────────────────────────────────────────
 const _petalColors = [
@@ -331,8 +331,10 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
 
   // ── Screen state ──────────────────────────────────────────────────────────
   _PickState _state = _PickState.idle;
-  BeautyProduct? _pickedProduct;
-  bool _isRare = false;
+  String? _wonTicket;
+  bool _isWin = false;
+  bool _isSubmittingTicket = false;
+  bool _isTicketSubmitted = false;
 
   // ── Rate limit ────────────────────────────────────────────────────────────
   int _usedCount = 0;
@@ -553,21 +555,22 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     await Future.delayed(const Duration(milliseconds: 650));
     if (!mounted) return;
 
-    final List<BeautyProduct> pool;
-    if (_rng.nextDouble() < _rareProbability) {
-      pool = beautyProducts.where((p) => p.isRareDrop).toList();
-    } else {
-      pool = beautyProducts.where((p) => !p.isRareDrop).toList();
+    // Peluang gacha: ~48% win ticket undian, ~52% zonk
+    final isWin = _rng.nextDouble() < _ticketWinRate;
+    String? wonTicket;
+    if (isWin) {
+      wonTicket = await GiveawayService().addVoucherFromShake(_uid);
     }
-    final product = pool[_rng.nextInt(pool.length)];
 
     await _recordShake();
     if (!mounted) return;
 
     setState(() {
       _state = _PickState.result;
-      _pickedProduct = product;
-      _isRare = product.isRareDrop;
+      _isWin = isWin;
+      _wonTicket = wonTicket;
+      _isSubmittingTicket = false;
+      _isTicketSubmitted = false;
       _isBursting = false;
     });
     _resultCtrl.forward(from: 0);
@@ -578,9 +581,55 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     _shakeEnergy = 0.0;
     setState(() {
       _state = _PickState.idle;
-      _pickedProduct = null;
-      _isRare = false;
+      _wonTicket = null;
+      _isWin = false;
+      _isSubmittingTicket = false;
+      _isTicketSubmitted = false;
     });
+  }
+
+  Future<void> _submitWonTicketDirectly() async {
+    if (_wonTicket == null || _isTicketSubmitted || _isSubmittingTicket) return;
+    setState(() => _isSubmittingTicket = true);
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      final email = user?.email ?? 'user@mirrora.app';
+      final name = user?.userMetadata?['name'] as String? ??
+          user?.userMetadata?['full_name'] as String? ??
+          (email.contains('@') ? email.split('@')[0] : 'Peserta');
+
+      await GiveawayService().submitVoucherToCampaign(
+        userId: _uid,
+        userName: name,
+        userEmail: email,
+        ticket: _wonTicket!,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isTicketSubmitted = true;
+        _isSubmittingTicket = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🎉 Tiket $_wonTicket berhasil dimasukkan ke Undian!'),
+          backgroundColor: MirroraTheme.dustyRose,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmittingTicket = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: MirroraTheme.charcoal,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1098,12 +1147,12 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           _onCooldown
               ? ''
               : _shakeEnergy >= 1.0
-              ? 'Memilih produk...'
+              ? 'Mencari tiket undian...'
               : _shakeEnergy > 0.6
               ? 'Hampir! Goyangkan lebih kencang! 💪'
               : _shakeEnergy > 0.2
               ? 'Goyangkan terus sampai penuh!'
-              : 'Butuh ~7 goyangan kuat untuk membuka produk',
+              : 'Butuh ~7 goyangan kuat untuk mengguncang tiket',
           style: const TextStyle(
             fontSize: 11,
             color: MirroraTheme.warmGray,
@@ -1121,7 +1170,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
         const SizedBox(width: 6),
         Expanded(
           child: Text(
-            '$remaining sesi tersisa · reset tiap 4 jam',
+            '$remaining kali shake tersisa hari ini · reset tiap 24 jam',
             style: const TextStyle(fontSize: 11, color: MirroraTheme.warmGray),
           ),
         ),
@@ -1180,7 +1229,6 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
 
   // ─── RESULT VIEW ──────────────────────────────────────────────────────────
   Widget _buildResultView() {
-    final p = _pickedProduct!;
     return Stack(
       children: [
         // Petals still falling in background
@@ -1205,191 +1253,25 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Badge
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        gradient: _isRare
-                            ? const LinearGradient(
-                                colors: [Color(0xFFC5A880), Color(0xFFE8C97A)],
-                              )
-                            : null,
-                        color: _isRare ? null : MirroraTheme.blushPink,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (_isRare
-                                    ? MirroraTheme.softGold
-                                    : MirroraTheme.dustyRose)
-                                .withValues(alpha: 0.25),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      child: Text(
-                        _isRare ? '🏅 Lucky Drop! Kamu beruntung!' : '🌸 Beauty Pick Hari Ini',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: _isRare ? Colors.white : MirroraTheme.dustyRose,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
+                  if (_isWin && _wonTicket != null)
+                    _buildWinTicketCard()
+                  else
+                    _buildZonkCard(),
 
-                  // Product card
-                  Container(
-                    decoration: BoxDecoration(
-                      color: MirroraTheme.white.withValues(alpha: 0.96),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: _isRare
-                            ? const Color(0xFFC5A880)
-                            : MirroraTheme.blushPink,
-                        width: _isRare ? 2 : 1.5,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (_isRare
-                                  ? MirroraTheme.softGold
-                                  : MirroraTheme.dustyRose)
-                              .withValues(alpha: 0.20),
-                          blurRadius: 22,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Emoji area
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 28),
-                          decoration: BoxDecoration(
-                            gradient: _isRare
-                                ? const LinearGradient(
-                                    colors: [Color(0xFFFFF8EC), Color(0xFFFFF3D0)],
-                                  )
-                                : const LinearGradient(
-                                    colors: [Color(0xFFFFF5F7), Color(0xFFF8E8EC)],
-                                  ),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(27),
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              p.emoji,
-                              style: const TextStyle(fontSize: 66),
-                            ),
-                          ),
-                        ),
-
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: _isRare
-                                      ? const Color(0xFFFFF3D0)
-                                      : MirroraTheme.blushPink,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  p.category,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: _isRare
-                                        ? MirroraTheme.softGold
-                                        : MirroraTheme.dustyRose,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                p.name,
-                                style: const TextStyle(
-                                  fontSize: 21,
-                                  fontWeight: FontWeight.w800,
-                                  color: MirroraTheme.charcoal,
-                                  height: 1.2,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                p.brand,
-                                style: const TextStyle(fontSize: 12, color: MirroraTheme.warmGray),
-                              ),
-                              const SizedBox(height: 14),
-                              Container(
-                                padding: const EdgeInsets.all(14),
-                                decoration: BoxDecoration(
-                                  color: MirroraTheme.cream,
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Text(
-                                  p.description,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    height: 1.6,
-                                    color: MirroraTheme.charcoal,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: MirroraTheme.blushPink,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(
-                                      Icons.lightbulb_outline_rounded,
-                                      size: 14,
-                                      color: MirroraTheme.dustyRose,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      p.tip,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        height: 1.5,
-                                        color: MirroraTheme.warmGray,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 16),
 
-                  // Buttons
+                  // Action Buttons
                   if (!_onCooldown)
                     ElevatedButton.icon(
                       onPressed: _resetToIdle,
                       icon: const Icon(Icons.refresh_rounded, size: 18),
                       label: Text(
                         'Shake Lagi (${_maxShakesPerWindow - _usedCount}x tersisa)',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: MirroraTheme.dustyRose,
+                        foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(28),
@@ -1410,7 +1292,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                           const Icon(Icons.timer_outlined, size: 16, color: MirroraTheme.dustyRose),
                           const SizedBox(width: 8),
                           Text(
-                            'Shake lagi dalam ${_formatCountdown(_cooldownRemaining)}',
+                            'Bisa shake lagi dalam ${_formatCountdown(_cooldownRemaining)}',
                             style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -1440,6 +1322,299 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                 ],
               ),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── TICKET WIN CARD ──────────────────────────────────────────────────────
+  Widget _buildWinTicketCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFC5A880), Color(0xFFE8C97A)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: MirroraTheme.softGold.withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Text(
+              '🎉 HORE! DAPAT TIKET UNDIAN!',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.4,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          decoration: BoxDecoration(
+            color: MirroraTheme.white.withValues(alpha: 0.98),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: const Color(0xFFC5A880), width: 1.8),
+            boxShadow: [
+              BoxShadow(
+                color: MirroraTheme.softGold.withValues(alpha: 0.22),
+                blurRadius: 22,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Header Ilustrasi Tiket
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFFF9EE), Color(0xFFFFF0D0)],
+                  ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: const Column(
+                  children: [
+                    Text('🎟️✨', style: TextStyle(fontSize: 56)),
+                    SizedBox(height: 8),
+                    Text(
+                      '1 Tiket Giveaway Berhasil Diguncang!',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF8B6B38),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Nomor Tiket Kamu:',
+                      style: TextStyle(fontSize: 12, color: MirroraTheme.warmGray),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: MirroraTheme.cream,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: const Color(0xFFC5A880).withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          _wonTicket!,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 2.5,
+                            color: MirroraTheme.dustyRose,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Tiket ini sudah otomatis tersimpan di dompet tiketmu. Masukkan ke undian sekarang untuk melipatgandakan peluang menang!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12, height: 1.5, color: MirroraTheme.charcoal),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Tombol Submit Langsung ke Undian
+                    if (_isTicketSubmitted)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F8F3),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFA5D6A7)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Tiket Sudah Masuk ke Undian! ✓',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF1B5E20),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      SizedBox(
+                        width: double.infinity,
+                        height: 46,
+                        child: ElevatedButton.icon(
+                          onPressed: _isSubmittingTicket ? null : _submitWonTicketDirectly,
+                          icon: _isSubmittingTicket
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                )
+                              : const Icon(Icons.how_to_reg_rounded, size: 18),
+                          label: Text(
+                            _isSubmittingTicket
+                                ? 'Memasukkan Tiket...'
+                                : 'Masukkan Tiket ke Undian Sekarang',
+                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFC5A880),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── ZONK CARD ────────────────────────────────────────────────────────────
+  Widget _buildZonkCard() {
+    final remaining = _maxShakesPerWindow - _usedCount;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            decoration: BoxDecoration(
+              color: MirroraTheme.blushPink,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: MirroraTheme.dustyRose.withValues(alpha: 0.3)),
+            ),
+            child: const Text(
+              '🌸 Belum Beruntung Kali Ini',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: MirroraTheme.dustyRose,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        Container(
+          decoration: BoxDecoration(
+            color: MirroraTheme.white.withValues(alpha: 0.98),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(color: MirroraTheme.blushPink, width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: MirroraTheme.dustyRose.withValues(alpha: 0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // Header Zonk
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFFFFF5F7), Color(0xFFFBECEF)],
+                  ),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: const Column(
+                  children: [
+                    Text('🍃🌸', style: TextStyle(fontSize: 54)),
+                    SizedBox(height: 8),
+                    Text(
+                      'ZONK! Bunga Sakura Berguguran',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: MirroraTheme.charcoal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Hanya kelopak sakura yang jatuh dari dahan. Tiket undian belum berhasil kamu goyangkan kali ini!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.5,
+                        color: MirroraTheme.charcoal,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: MirroraTheme.cream,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline_rounded, size: 18, color: MirroraTheme.dustyRose),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              remaining > 0
+                                  ? 'Masih ada $remaining kali kesempatan lagi hari ini! Coba goyang lebih bertenaga!'
+                                  : 'Kesempatan harianmu sudah habis. Kembali lagi besok untuk berburu tiket!',
+                              style: const TextStyle(fontSize: 11.5, color: MirroraTheme.warmGray),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -1488,10 +1663,10 @@ class ShakeToPickPromptDialog extends StatelessWidget {
               ),
               child: const Column(
                 children: [
-                  Text('🌸📱', style: TextStyle(fontSize: 44)),
+                  Text('🌸🎟️', style: TextStyle(fontSize: 44)),
                   SizedBox(height: 10),
                   Text(
-                    'Shake to Pick!',
+                    'Berburu Tiket Undian! ✨',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -1500,7 +1675,7 @@ class ShakeToPickPromptDialog extends StatelessWidget {
                   ),
                   SizedBox(height: 6),
                   Text(
-                    'Guncang pohon sakura dan dapatkan\nrekomendasi beauty hari ini!',
+                    'Guncang pohon sakura dan temukan tiket\nAnniversary Giveaway berhadiah spesial!',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, height: 1.5, color: Color(0xFFFFE8EE)),
                   ),
@@ -1514,13 +1689,13 @@ class ShakeToPickPromptDialog extends StatelessWidget {
               child: Column(
                 children: [
                   _row(Icons.park_rounded, 'Guncang Pohon Sakura',
-                      'Goyang device-mu — kelopak bunga berterbangan!'),
+                      'Goyang device-mu kuat-kuat agar tiket jatuh!'),
                   const SizedBox(height: 10),
-                  _row(Icons.auto_awesome, 'Lucky Drop Spesial',
-                      '8% chance dapat produk premium eksklusif 🏅'),
+                  _row(Icons.confirmation_number_outlined, 'Peluang Gacha Berimbang',
+                      'Bisa dapat tiket undian atau kelopak zonk 🍃'),
                   const SizedBox(height: 10),
-                  _row(Icons.timer_outlined, '3x per 4 Jam',
-                      'Terbatas — perlu goyangan ~7 kali yang kuat'),
+                  _row(Icons.timer_outlined, 'Maksimal 3x per Hari',
+                      'Tiap hari ada 3x goyang. Kumpulkan tiket sebanyaknya!'),
                   const SizedBox(height: 22),
                   SizedBox(
                     width: double.infinity,
@@ -1541,7 +1716,7 @@ class ShakeToPickPromptDialog extends StatelessWidget {
                         ),
                       ),
                       child: const Text(
-                        'Coba Sekarang! 🎉',
+                        'Mulai Guncang Pohon! 🌸',
                         style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                       ),
                     ),

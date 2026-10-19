@@ -347,7 +347,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _SettingTile(
                     icon: Icons.admin_panel_settings_outlined,
                     title: 'Portal Undian (Owner / Admin) 🛡️',
-                    subtitle: 'Terlindungi Biometrik & SHA-256',
+                    subtitle: 'Terlindungi Enkripsi SHA-256',
                     onTap: _openAdminPortal,
                   ),
               ],

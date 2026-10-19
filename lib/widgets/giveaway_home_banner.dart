@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/giveaway_model.dart';
+import '../screens/shake_to_pick_screen.dart';
 import '../services/giveaway_service.dart';
 import '../theme/mirrora_theme.dart';
 
@@ -47,21 +48,26 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
     return false;
   }
 
-  Future<void> _handleParticipate(GiveawayCampaign campaign) async {
+  Future<void> _handleSubmitAvailableVouchers() async {
     final uid = _currentUserId ?? 'user_${widget.userName.toLowerCase()}';
     final email = _currentUserEmail ?? '${widget.userName.toLowerCase()}@mirrora.user';
 
     setState(() => _isRegistering = true);
-
     try {
-      final participant = await _service.registerParticipant(
+      final count = await _service.submitAllVouchersToCampaign(
         userId: uid,
         userName: widget.userName,
         userEmail: email,
       );
 
       if (!mounted) return;
-      _showRegistrationSuccessDialog(participant.entryTicket, campaign.prize);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('🎉 Berhasil memasukkan $count tiket ke Undian!'),
+          backgroundColor: MirroraTheme.dustyRose,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,88 +82,16 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
     }
   }
 
-  void _showRegistrationSuccessDialog(String ticket, String prize) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: MirroraTheme.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
-          side: const BorderSide(color: MirroraTheme.blushPink),
-        ),
-        contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: MirroraTheme.blushPink.withValues(alpha: 0.6),
-                shape: BoxShape.circle,
-              ),
-              child: const Center(
-                child: Text('🎉', style: TextStyle(fontSize: 28)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Berhasil Terdaftar! 🎟️',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: MirroraTheme.charcoal,
-                letterSpacing: -0.2,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Nomor tiket undian sah kamu:',
-              style: TextStyle(fontSize: 12.5, color: MirroraTheme.warmGray),
-            ),
-            const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: MirroraTheme.cream,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: MirroraTheme.dustyRose.withValues(alpha: 0.4)),
-              ),
-              child: Text(
-                ticket,
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.5,
-                  color: MirroraTheme.dustyRose,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Hasil pengundian otomatis diundi secara adil & dikunci transparan ke dalam blockchain lokal.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11.5, height: 1.45, color: MirroraTheme.warmGray),
-            ),
-          ],
-        ),
-        actions: [
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(ctx),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: MirroraTheme.dustyRose,
-                foregroundColor: MirroraTheme.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('Mengerti', style: TextStyle(fontWeight: FontWeight.w700)),
-            ),
-          ),
-        ],
-      ),
-    );
+  void _goToShakeToPick() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ShakeToPickScreen()),
+    ).then((_) {
+      if (mounted) {
+        final uid = _currentUserId ?? 'user_${widget.userName.toLowerCase()}';
+        _service.refreshVoucherCount(uid);
+      }
+    });
   }
 
   /// Membuka form klaim hadiah untuk pemenang
@@ -425,8 +359,8 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
   Widget _buildOpenBanner(GiveawayCampaign campaign) {
     final uid = _currentUserId ?? 'user_${widget.userName.toLowerCase()}';
     final email = _currentUserEmail ?? '${widget.userName.toLowerCase()}@mirrora.user';
-    final isRegistered = _service.isUserRegistered(uid, email);
-    final userTicket = _service.getUserTicket(uid, email);
+    final registeredTickets = _service.getUserRegisteredTickets(uid, email);
+    final availableVouchers = _service.getAvailableVouchers(uid);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 22),
@@ -487,7 +421,7 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
                       const Icon(Icons.people_outline_rounded, size: 12, color: MirroraTheme.dustyRose),
                       const SizedBox(width: 4),
                       Text(
-                        '${campaign.participants.length} Peserta',
+                        '${campaign.participants.length} Entri Masuk',
                         style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: MirroraTheme.charcoal),
                       ),
                     ],
@@ -538,32 +472,108 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
 
-            // Button Action
-            if (isRegistered) ...[
+            // Status Tiket Terdaftar Milik User
+            if (registeredTickets.isNotEmpty) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F8F3),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: const Color(0xFFA5D6A7)),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.check_circle_rounded, size: 16, color: Color(0xFF2E7D32)),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Terdaftar ✓  $userTicket',
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF1B5E20),
-                      ),
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, size: 15, color: Color(0xFF2E7D32)),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Kamu memiliki ${registeredTickets.length} tiket di undian ini:',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1B5E20),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: registeredTickets.map((t) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFFA5D6A7)),
+                          ),
+                          child: Text(
+                            t,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: Color(0xFF1B5E20),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Action Buttons
+            if (availableVouchers.isNotEmpty) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 42,
+                child: ElevatedButton.icon(
+                  onPressed: _isRegistering ? null : _handleSubmitAvailableVouchers,
+                  icon: _isRegistering
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.confirmation_number_rounded, size: 16),
+                  label: Text(
+                    _isRegistering
+                        ? 'Memasukkan Tiket...'
+                        : 'Masukkan ${availableVouchers.length} Tiket Hasil Shake ke Undian',
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFC5A880),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                height: 38,
+                child: OutlinedButton.icon(
+                  onPressed: _goToShakeToPick,
+                  icon: const Text('🌸', style: TextStyle(fontSize: 13)),
+                  label: const Text(
+                    'Cari Tambahan Tiket via Shake to Pick',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: MirroraTheme.dustyRose,
+                    side: const BorderSide(color: MirroraTheme.blushPink),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
                 ),
               ),
             ] else ...[
@@ -571,16 +581,12 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
                 width: double.infinity,
                 height: 42,
                 child: ElevatedButton.icon(
-                  onPressed: _isRegistering ? null : () => _handleParticipate(campaign),
-                  icon: _isRegistering
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Icon(Icons.card_giftcard_rounded, size: 16),
+                  onPressed: _goToShakeToPick,
+                  icon: const Text('🌸', style: TextStyle(fontSize: 15)),
                   label: Text(
-                    _isRegistering ? 'Mendaftarkan...' : 'Ikuti Undian',
+                    registeredTickets.isEmpty
+                        ? 'Dapatkan Tiket via Shake to Pick'
+                        : 'Tambah Tiket Lagi via Shake to Pick',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                   ),
                   style: ElevatedButton.styleFrom(

@@ -43,8 +43,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Tampilkan daily prompt & cek pemenang giveaway setelah frame pertama selesai di-render
+    // Tampilkan daily prompt, refresh voucher count, & cek pemenang giveaway setelah frame pertama selesai di-render
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final uid = Supabase.instance.client.auth.currentUser?.id ?? 'user_${widget.userName.toLowerCase()}';
+      GiveawayService().refreshVoucherCount(uid);
       _maybeShowDailyPrompt();
       _checkWinnerCelebration();
     });
@@ -142,6 +144,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  String get _currentUid =>
+      Supabase.instance.client.auth.currentUser?.id ?? 'user_${widget.userName.toLowerCase()}';
+
+  String get _currentUserEmail =>
+      Supabase.instance.client.auth.currentUser?.email ?? '${widget.userName.toLowerCase()}@mirrora.user';
+
   // ---------------------------------------------------------------- HEADER
   Widget _buildHeader() {
     return Row(
@@ -169,6 +177,51 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+
+        // Voucher / Tiket Undian Icon with Number beside it
+        ValueListenableBuilder<int>(
+          valueListenable: GiveawayService().voucherCountNotifier,
+          builder: (context, count, _) {
+            return InkWell(
+              onTap: _showVoucherCollectionSheet,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: count > 0 ? MirroraTheme.blushPink : MirroraTheme.cream,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: count > 0
+                        ? MirroraTheme.dustyRose.withValues(alpha: 0.4)
+                        : MirroraTheme.blushPink,
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.confirmation_number_rounded,
+                      color: count > 0 ? MirroraTheme.dustyRose : MirroraTheme.charcoal,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      '$count',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: count > 0 ? MirroraTheme.dustyRose : MirroraTheme.charcoal,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+
         IconButton(
           onPressed: () => _comingSoon('Notifikasi'),
           tooltip: 'Notifikasi',
@@ -178,6 +231,296 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Menampilkan bottom sheet koleksi tiket undian milik user
+  void _showVoucherCollectionSheet() {
+    final service = GiveawayService();
+    final uid = _currentUid;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: MirroraTheme.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            final curAvailable = service.getAvailableVouchers(uid);
+            final curRegistered = service.getUserRegisteredTickets(uid, _currentUserEmail);
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                22,
+                16,
+                22,
+                MediaQuery.of(sheetContext).viewInsets.bottom + 28,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Drag Handle
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: MirroraTheme.blushPink,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Header
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: MirroraTheme.blushPink,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.confirmation_number_rounded,
+                          color: MirroraTheme.dustyRose,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Dompet Tiket Undian 🎟️',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: MirroraTheme.charcoal,
+                              ),
+                            ),
+                            Text(
+                              'Semakin banyak tiket, semakin besar peluang menang!',
+                              style: TextStyle(fontSize: 11.5, color: MirroraTheme.warmGray),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Tiket yang belum dimasukkan (Hasil Shake)
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: MirroraTheme.cream,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: MirroraTheme.blushPink),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Tiket Baru (Belum Masuk Undian)',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                                color: MirroraTheme.charcoal,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: curAvailable.isNotEmpty
+                                    ? MirroraTheme.dustyRose
+                                    : MirroraTheme.warmGray.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${curAvailable.length} Tiket',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        if (curAvailable.isNotEmpty) ...[
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children: curAvailable.map((ticket) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFC5A880),
+                                    width: 1.2,
+                                  ),
+                                ),
+                                child: Text(
+                                  ticket,
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1,
+                                    color: MirroraTheme.dustyRose,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 42,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                final count = await service.submitAllVouchersToCampaign(
+                                  userId: uid,
+                                  userName: widget.userName,
+                                  userEmail: _currentUserEmail,
+                                );
+                                if (!sheetContext.mounted) return;
+                                setSheetState(() {});
+                                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                  SnackBar(
+                                    content: Text('🎉 Berhasil memasukkan $count tiket ke Undian!'),
+                                    backgroundColor: MirroraTheme.dustyRose,
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.send_rounded, size: 16),
+                              label: Text(
+                                'Masukkan Semua (${curAvailable.length}) ke Undian',
+                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: MirroraTheme.dustyRose,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              'Kamu belum punya voucher tiket baru. Guncang pohon sakura di Shake to Pick untuk mendapatkan tiket!',
+                              style: TextStyle(fontSize: 12, height: 1.45, color: MirroraTheme.warmGray),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Tiket yang Sudah Sah Terdaftar di Giveaway
+                  if (curRegistered.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1F8F3),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFFA5D6A7)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF2E7D32)),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Tiket Sah Kamu di Undian (${curRegistered.length}):',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF1B5E20),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: curRegistered.map((t) {
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFFA5D6A7)),
+                                ),
+                                child: Text(
+                                  t,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Color(0xFF1B5E20),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
+
+                  // Tombol ke Shake to Pick
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ShakeToPickScreen()),
+                        ).then((_) {
+                          if (mounted) service.refreshVoucherCount(uid);
+                        });
+                      },
+                      icon: const Text('🌸', style: TextStyle(fontSize: 16)),
+                      label: const Text(
+                        'Cari Tiket di Shake to Pick',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: MirroraTheme.dustyRose,
+                        side: const BorderSide(color: MirroraTheme.dustyRose, width: 1.2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 

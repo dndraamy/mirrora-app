@@ -35,6 +35,7 @@ class GiveawayService {
   late Box _box;
   late SimpleBlockchain _blockchain;
   late ValueNotifier<GiveawayCampaign> campaignNotifier;
+  late ValueNotifier<int> voucherCountNotifier;
 
   bool _initialized = false;
 
@@ -78,6 +79,7 @@ class GiveawayService {
     }
 
     campaignNotifier = ValueNotifier<GiveawayCampaign>(campaign);
+    voucherCountNotifier = ValueNotifier<int>(0);
     _initialized = true;
 
     // 3. Sinkronisasi latar belakang hemat kuota (Background Sync)
@@ -128,35 +130,116 @@ class GiveawayService {
     }
   }
 
-  /// Mengecek apakah user saat ini sudah terdaftar di giveaway
-  bool isUserRegistered(String? userId, String? userEmail) {
-    if (userId == null && userEmail == null) return false;
+  /// Refresh voucher count notifier for current user
+  void refreshVoucherCount(String? uid) {
+    if (uid == null || uid.isEmpty) {
+      voucherCountNotifier.value = 0;
+      return;
+    }
+    final vouchers = getAvailableVouchers(uid);
+    voucherCountNotifier.value = vouchers.length;
+  }
+
+  /// Ambil daftar voucher tiket yang dimenangkan user dari Shake to Pick tapi belum dimasukkan ke undian
+  List<String> getAvailableVouchers(String uid) {
+    final list = _box.get('user_available_vouchers_$uid') as List<dynamic>?;
+    return list != null ? list.map((e) => e.toString()).toList() : [];
+  }
+
+  /// Tambah voucher tiket baru hasil menang Shake to Pick
+  Future<String> addVoucherFromShake(String uid) async {
+    final randNum = 1000 + Random().nextInt(9000);
+    final ticket = '#GLOW-$randNum';
+    final current = getAvailableVouchers(uid);
+    current.add(ticket);
+    await _box.put('user_available_vouchers_$uid', current);
+    voucherCountNotifier.value = current.length;
+    return ticket;
+  }
+
+  /// Memasukkan 1 voucher tiket tertentu ke dalam undian
+  Future<GiveawayParticipant> submitVoucherToCampaign({
+    required String userId,
+    required String userName,
+    required String userEmail,
+    required String ticket,
+  }) async {
+    final campaign = currentCampaign;
+    if (!campaign.isOpen) {
+      throw Exception('Pendaftaran giveaway saat ini sedang ditutup.');
+    }
+
+    final participant = GiveawayParticipant(
+      userId: userId,
+      userName: userName.trim().isNotEmpty ? userName.trim() : 'Peserta Cantik',
+      userEmail: userEmail.trim(),
+      entryTicket: ticket,
+      registeredAt: DateTime.now(),
+    );
+
+    campaign.participants.add(participant);
+    await _saveCampaign(campaign);
+
+    // Hapus dari voucher yang belum terpakai
+    final current = getAvailableVouchers(userId);
+    current.remove(ticket);
+    await _box.put('user_available_vouchers_$userId', current);
+    voucherCountNotifier.value = current.length;
+
+    _trySaveParticipantToSupabase(participant);
+    return participant;
+  }
+
+  /// Memasukkan semua voucher yang dimiliki user sekaligus ke undian
+  Future<int> submitAllVouchersToCampaign({
+    required String userId,
+    required String userName,
+    required String userEmail,
+  }) async {
+    final vouchers = getAvailableVouchers(userId);
+    if (vouchers.isEmpty) return 0;
+
+    final count = vouchers.length;
+    for (final ticket in List<String>.from(vouchers)) {
+      await submitVoucherToCampaign(
+        userId: userId,
+        userName: userName,
+        userEmail: userEmail,
+        ticket: ticket,
+      );
+    }
+    return count;
+  }
+
+  /// Mengambil seluruh tiket yang sudah terdaftar milik user di kampanye saat ini
+  List<String> getUserRegisteredTickets(String? userId, String? userEmail) {
+    if (userId == null && userEmail == null) return [];
     final uid = userId?.trim();
     final email = userEmail?.trim().toLowerCase();
 
-    return currentCampaign.participants.any((p) {
+    final result = <String>[];
+    for (final p in currentCampaign.participants) {
       final matchUid = uid != null && uid.isNotEmpty && p.userId == uid;
       final matchEmail = email != null && email.isNotEmpty && p.userEmail.toLowerCase() == email;
-      return matchUid || matchEmail;
-    });
-  }
-
-  /// Mendapatkan tiket undian milik user yang sedang login
-  String? getUserTicket(String? userId, String? userEmail) {
-    if (userId == null && userEmail == null) return null;
-    final uid = userId?.trim();
-    final email = userEmail?.trim().toLowerCase();
-
-    for (final p in currentCampaign.participants) {
-      if ((uid != null && uid.isNotEmpty && p.userId == uid) ||
-          (email != null && email.isNotEmpty && p.userEmail.toLowerCase() == email)) {
-        return p.entryTicket;
+      if (matchUid || matchEmail) {
+        result.add(p.entryTicket);
       }
     }
-    return null;
+    return result;
   }
 
-  /// Pendaftaran peserta baru ke dalam undian
+  /// Mengecek apakah user saat ini sudah memiliki tiket terdaftar di giveaway
+  bool isUserRegistered(String? userId, String? userEmail) {
+    return getUserRegisteredTickets(userId, userEmail).isNotEmpty;
+  }
+
+  /// Mendapatkan tiket undian milik user (tiket pertama atau terbaru)
+  String? getUserTicket(String? userId, String? userEmail) {
+    final tickets = getUserRegisteredTickets(userId, userEmail);
+    return tickets.isNotEmpty ? tickets.first : null;
+  }
+
+  /// Pendaftaran peserta baru ke dalam undian (bisa berkali-kali)
   Future<GiveawayParticipant> registerParticipant({
     required String userId,
     required String userName,
@@ -168,11 +251,6 @@ class GiveawayService {
       throw Exception('Pendaftaran giveaway saat ini sedang ditutup.');
     }
 
-    if (isUserRegistered(userId, userEmail)) {
-      throw Exception('Anda sudah terdaftar dalam giveaway ini!');
-    }
-
-    // Format nomor tiket unik
     final ticketNumber = 1000 + campaign.participants.length + 1;
     final ticket = '#GLOW-$ticketNumber';
 
@@ -187,7 +265,6 @@ class GiveawayService {
     campaign.participants.add(participant);
     await _saveCampaign(campaign);
 
-    // Coba simpan ke Supabase di background tanpa menahan user
     _trySaveParticipantToSupabase(participant);
 
     return participant;

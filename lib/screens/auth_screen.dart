@@ -47,10 +47,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool get isLogin => _selectedTab == 0;
 
-  /// Tombol sidik jari hanya tampil jika:
-  /// 1. Sedang di tab Login
-  /// 2. User sudah pernah login di perangkat ini (ada sesi Supabase)
-  /// 3. Fitur kunci sidik jari sudah diaktifkan di Settings
   bool get _showBiometricButton =>
       isLogin && _hasActiveSession && _biometricEnabled;
 
@@ -94,9 +90,7 @@ class _AuthScreenState extends State<AuthScreen> {
     });
   }
 
-  // Dipanggil setiap kali status auth Supabase berubah.
-  // Saat user klik link konfirmasi → supabase_flutter fire AuthChangeEvent.signedIn
-  // → kita tampilkan dialog sukses lalu navigasi ke home.
+  // Saat user klik link konfirmasi → supabase_flutter fire AuthChangeEvent.signedIn → kita tampilkan dialog sukses lalu navigasi ke home.
   void _onAuthStateChanged(AuthState state) {
     if (!mounted) return;
     if (state.event == AuthChangeEvent.passwordRecovery) {
@@ -494,9 +488,8 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const TextSpan(
                 text:
-                    '\n\nKlik link tersebut — aplikasi Mirrora akan '
+                    '\n\nKlik link tersebut lalu aplikasi Mirrora akan '
                     'terbuka otomatis dan kamu langsung masuk.\n\n'
-                    'Tidak perlu login manual lagi setelah konfirmasi.',
               ),
             ],
           ),
@@ -681,7 +674,7 @@ class _AuthScreenState extends State<AuthScreen> {
                     else ...[
                       const SizedBox(height: 4),
                       Text(
-                        isLogin ? 'Welcome to Mirrora' : 'Create Your Account',
+                        isLogin ? 'Welcome to Mirrora!' : 'Create Your Account',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 25,
@@ -692,7 +685,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       const SizedBox(height: 7),
                       Text(
                         isLogin
-                            ? 'Masuk dan lanjutkan perjalanan merawat dirimu.'
+                            ? 'Masuk dan lanjutkan perjalanan self-care-mu.'
                             : 'Mulai perjalanan self-care bersama Mirrora.',
                         textAlign: TextAlign.center,
                         style: const TextStyle(
@@ -854,9 +847,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
 
-                      // Tombol buka dengan sidik jari —
-                      // hanya muncul jika user sudah pernah login di perangkat ini
-                      // dan fitur kunci sidik jari sudah diaktifkan.
+                      // Tombol buka dengan sidik jari hanya muncul jika user sudah pernah login di perangkat ini dan fitur kunci sidik jari sudah diaktifkan.
                       if (_showBiometricButton) ...[
                         const SizedBox(height: 12),
                         OutlinedButton.icon(

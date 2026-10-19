@@ -265,7 +265,7 @@ class _ForgotPasswordSheetState extends State<ForgotPasswordSheet> {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Tautan pemulihan akan langsung membuka aplikasi Mirrora secara aman tanpa error localhost.',
+                  'Tautan pemulihan akan langsung membuka aplikasi Mirrora secara aman.',
                   style: TextStyle(
                     fontSize: 11.5,
                     height: 1.45,

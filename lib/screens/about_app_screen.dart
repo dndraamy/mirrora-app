@@ -6,7 +6,7 @@ import '../theme/mirrora_theme.dart';
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
 
-  static const String version = '1.0.0';
+  static const String version = 'v1.0.0 (Build 2026)';
 
   @override
   State<AboutScreen> createState() => _AboutScreenState();
@@ -90,7 +90,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      'Beauty & Self-Care',
+                      'Your AI Beauty & Self-Care Companion',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
@@ -111,7 +111,7 @@ class _AboutScreenState extends State<AboutScreen> {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Text(
-                          'Versi ${AboutScreen.version}',
+                          'Version ${AboutScreen.version}',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -125,9 +125,10 @@ class _AboutScreenState extends State<AboutScreen> {
               ),
               const SizedBox(height: 22),
               const Text(
-                'Mirrora adalah aplikasi beauty dan self-care yang membantu '
-                'kamu menjaga rutinitas perawatan harian, menemukan produk '
-                'yang cocok, dan merawat diri dengan lebih konsisten.',
+                'Mirrora adalah aplikasi asisten kecantikan dan perawatan diri cerdas '
+                'yang dirancang untuk membantumu membangun rutinitas harian, '
+                'menemukan produk makeup/skincare yang tepat, '
+                'serta menemani hari-harimu dengan teknologi AI.',
                 style: TextStyle(
                   fontSize: 14,
                   height: 1.6,
@@ -148,7 +149,7 @@ class _AboutScreenState extends State<AboutScreen> {
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
                       child: const _InfoRow(
                         icon: Icons.info_outline_rounded,
-                        label: 'Versi',
+                        label: 'Version',
                         value: AboutScreen.version,
                       ),
                     ),
@@ -160,7 +161,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                     const _InfoRow(
                       icon: Icons.phone_android_rounded,
-                      label: 'Dibangun dengan',
+                      label: 'Framework',
                       value: 'Flutter',
                     ),
                     const Divider(
@@ -171,8 +172,8 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                     const _InfoRow(
                       icon: Icons.storage_rounded,
-                      label: 'Penyimpanan data',
-                      value: 'Lokal (Hive)',
+                      label: 'Database',
+                      value: 'Hive (Lokal) & Supabase (Cloud)',
                     ),
                   ],
                 ),
