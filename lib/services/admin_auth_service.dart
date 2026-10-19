@@ -31,7 +31,7 @@ class AdminAuthService {
   /// Cek apakah mode stealth aktif (sembunyikan tombol dari settings)
   bool isStealthMode() {
     final box = Hive.box(_boxName);
-    return box.get(_hideTileKey, defaultValue: false) as bool;
+    return box.get(_hideTileKey, defaultValue: true) as bool;
   }
 
   /// Ubah pengaturan mode stealth
