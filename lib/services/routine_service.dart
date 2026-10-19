@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/routine_model.dart';
+import 'notification_service.dart';
 
 /// Service terpusat untuk menyimpan dan mengelola Daily Routine (Rutinitas Skincare) pengguna.
 /// Tersimpan secara persisten di Hive dan terisolasi per akun Supabase.
@@ -133,15 +134,18 @@ class RoutineService extends ChangeNotifier {
 
         _routines = loaded;
         _isLoaded = true;
+        NotificationService().syncAllRoutineNotifications(_routines);
       } else {
         // Jika belum ada rutinitas yang diinput oleh user, biarkan kosong
         _routines = [];
         _isLoaded = true;
+        NotificationService().cancelAll();
       }
     } catch (e) {
       debugPrint('Error loading routines: $e');
       _routines = [];
       _isLoaded = true;
+      NotificationService().cancelAll();
     }
   }
 
@@ -184,12 +188,16 @@ class RoutineService extends ChangeNotifier {
 
   /// Menambah rutinitas baru
   Future<void> addRoutine(DailyRoutine routine) async {
-    _routines = List<DailyRoutine>.from(_routines);
-    _routines.add(routine.copyWith(
+    final newRoutine = routine.copyWith(
       orderIndex: _routines.length,
-    ));
+    );
+    _routines = List<DailyRoutine>.from(_routines);
+    _routines.add(newRoutine);
     notifyListeners();
     await _saveToStorage();
+
+    // Jadwalkan notifikasi harian otomatis
+    NotificationService().scheduleRoutineNotification(newRoutine);
   }
 
   /// Memperbarui rutinitas yang sudah ada
@@ -200,6 +208,9 @@ class RoutineService extends ChangeNotifier {
       _routines[index] = updated;
       notifyListeners();
       await _saveToStorage();
+
+      // Perbarui jadwal notifikasi rutinitas ini
+      NotificationService().scheduleRoutineNotification(updated);
     }
   }
 
@@ -209,6 +220,9 @@ class RoutineService extends ChangeNotifier {
     _routines.removeWhere((r) => r.id == id);
     notifyListeners();
     await _saveToStorage();
+
+    // Batalkan notifikasi rutinitas yang dihapus
+    NotificationService().cancelRoutineNotification(id);
   }
 
   /// Mereset semua checklist rutinitas untuk hari ini
@@ -226,6 +240,7 @@ class RoutineService extends ChangeNotifier {
     _routines = List<DailyRoutine>.from(DailyRoutine.defaultStarterRoutines());
     notifyListeners();
     await _saveToStorage();
+    NotificationService().syncAllRoutineNotifications(_routines);
   }
 
   /// Menghapus semua rutinitas yang ada
@@ -233,6 +248,7 @@ class RoutineService extends ChangeNotifier {
     _routines = [];
     notifyListeners();
     await _saveToStorage();
+    NotificationService().cancelAll();
   }
 
   /// Dipanggil saat user logout agar data in-memory bersih dan tidak terbawa ke akun berikutnya
@@ -241,6 +257,7 @@ class RoutineService extends ChangeNotifier {
     _routines = [];
     _isLoaded = false;
     notifyListeners();
+    NotificationService().cancelAll();
   }
 }
 

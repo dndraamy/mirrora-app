@@ -8,6 +8,7 @@ import 'screens/auth_screen.dart';
 import 'screens/reset_password_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/giveaway_service.dart';
+import 'services/notification_service.dart';
 import 'theme/mirrora_theme.dart';
 
 Future<void> main() async {
@@ -16,6 +17,8 @@ Future<void> main() async {
   await Hive.initFlutter();
   await Hive.openBox('settingsBox');
   await GiveawayService().init();
+  await NotificationService().init();
+  await NotificationService().requestPermissions();
 
   await Supabase.initialize(
     url: 'https://paeuxgviqbajuitsosuq.supabase.co',

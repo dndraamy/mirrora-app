@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/routine_model.dart';
+import '../services/notification_service.dart';
 import '../services/routine_service.dart';
 import '../theme/mirrora_theme.dart';
 
@@ -169,45 +170,158 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
                     const SizedBox(height: 16),
 
                     // Input Jam & Catatan
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 4,
-                          child: TextField(
-                            controller: timeController,
-                            decoration: InputDecoration(
-                              labelText: 'Jam (Opsional)',
-                              hintText: '07:00',
-                              prefixIcon: const Icon(Icons.access_time_rounded, size: 18),
-                              filled: true,
-                              fillColor: MirroraTheme.cream,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(color: MirroraTheme.blushPink),
+                    Builder(
+                      builder: (builderCtx) {
+                        Future<void> pickTime() async {
+                          TimeOfDay initial = const TimeOfDay(hour: 7, minute: 0);
+                          if (timeController.text.isNotEmpty) {
+                            final parts = timeController.text
+                                .replaceAll('.', ':')
+                                .split(':');
+                            if (parts.length >= 2) {
+                              final h = int.tryParse(parts[0]);
+                              final m = int.tryParse(parts[1]);
+                              if (h != null && m != null) {
+                                initial = TimeOfDay(hour: h, minute: m);
+                              }
+                            }
+                          }
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: initial,
+                            builder: (pickerCtx, child) => Theme(
+                              data: Theme.of(pickerCtx).copyWith(
+                                colorScheme: const ColorScheme.light(
+                                  primary: MirroraTheme.dustyRose,
+                                  onPrimary: Colors.white,
+                                  surface: MirroraTheme.white,
+                                  onSurface: MirroraTheme.charcoal,
+                                ),
                               ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              child: child!,
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 6,
-                          child: TextField(
-                            controller: noteController,
-                            decoration: InputDecoration(
-                              labelText: 'Catatan / Tips (Opsional)',
-                              hintText: 'Tepuk lembut',
-                              filled: true,
-                              fillColor: MirroraTheme.cream,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: const BorderSide(color: MirroraTheme.blushPink),
+                          );
+                          if (picked != null) {
+                            final hh = picked.hour.toString().padLeft(2, '0');
+                            final mm = picked.minute.toString().padLeft(2, '0');
+                            timeController.text = '$hh:$mm';
+                            setSheetState(() {});
+                          }
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 4,
+                                  child: InkWell(
+                                    onTap: pickTime,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: IgnorePointer(
+                                      child: TextField(
+                                        controller: timeController,
+                                        decoration: InputDecoration(
+                                          labelText: 'Jam Notifikasi',
+                                          hintText: '07:00',
+                                          prefixIcon: const Icon(
+                                            Icons.access_time_rounded,
+                                            size: 18,
+                                            color: MirroraTheme.dustyRose,
+                                          ),
+                                          filled: true,
+                                          fillColor: MirroraTheme.cream,
+                                          border: OutlineInputBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            borderSide: const BorderSide(
+                                              color: MirroraTheme.blushPink,
+                                            ),
+                                          ),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                            vertical: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  flex: 6,
+                                  child: TextField(
+                                    controller: noteController,
+                                    decoration: InputDecoration(
+                                      labelText: 'Catatan / Tips (Opsional)',
+                                      hintText: 'Tepuk lembut',
+                                      filled: true,
+                                      fillColor: MirroraTheme.cream,
+                                      border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(14),
+                                        borderSide: const BorderSide(
+                                          color: MirroraTheme.blushPink,
+                                        ),
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (timeController.text.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.notifications_active_rounded,
+                                    size: 13,
+                                    color: MirroraTheme.dustyRose,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Text(
+                                      'Pengingat berbunyi tiap jam ${timeController.text} 🔔',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: MirroraTheme.dustyRose,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                  InkWell(
+                                    onTap: () {
+                                      timeController.clear();
+                                      setSheetState(() {});
+                                    },
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                        vertical: 2,
+                                      ),
+                                      child: Text(
+                                        'Hapus Jam',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.redAccent,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
+                            ],
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 20),
 
@@ -326,6 +440,20 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.notifications_active_rounded, color: MirroraTheme.dustyRose),
+              title: const Text('Tes Notifikasi HP', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Kirim notifikasi pengingat ke status bar HP sekarang'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await NotificationService().showTestNotification();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Notifikasi tes berhasil dikirim! Silakan periksa status bar HP kamu.')),
+                );
+              },
+            ),
+            const Divider(color: MirroraTheme.blushPink),
             ListTile(
               leading: const Icon(Icons.restart_alt_rounded, color: MirroraTheme.dustyRose),
               title: const Text('Mulai Ulang Checklist Hari Ini', style: TextStyle(fontWeight: FontWeight.w600)),
