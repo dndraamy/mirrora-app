@@ -24,6 +24,7 @@ dependencies:
   noise_meter: ^5.0.2
   permission_handler: ^11.3.1
   http: ^1.2.0
+  crypto: ^3.0.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

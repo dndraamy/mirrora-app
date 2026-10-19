@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/giveaway_service.dart';
 import '../theme/mirrora_theme.dart';
+import '../widgets/giveaway_home_banner.dart';
+import '../widgets/winner_celebration_dialog.dart';
 import 'bubble_pop_screen.dart';
 import 'favorite_products_screen.dart';
 import 'shake_to_pick_screen.dart';
@@ -39,8 +42,38 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Tampilkan daily prompt setelah frame pertama selesai di-render
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowDailyPrompt());
+    // Tampilkan daily prompt & cek pemenang giveaway setelah frame pertama selesai di-render
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowDailyPrompt();
+      _checkWinnerCelebration();
+    });
+  }
+
+  /// Cek apakah akun user yang login adalah pemenang giveaway blockchain
+  Future<void> _checkWinnerCelebration() async {
+    if (!mounted) return;
+    final user = Supabase.instance.client.auth.currentUser;
+    final uid = user?.id;
+    final email = user?.email;
+    final isWinner = GiveawayService().isUserWinner(uid, email);
+    if (!isWinner) return;
+
+    final winnerBlock = GiveawayService().currentCampaign.winnerBlock;
+    if (winnerBlock == null) return;
+
+    final box = Hive.box('settingsBox');
+    final shownKey =
+        'giveaway_celebration_shown_${winnerBlock.campaignId}_${winnerBlock.index}';
+    if (box.get(shownKey, defaultValue: false) == true) return;
+
+    // Tunggu sedikit agar tidak bertabrakan dengan popup prompt harian
+    await Future.delayed(const Duration(milliseconds: 1400));
+    if (!mounted) return;
+
+    await box.put(shownKey, true);
+    if (!mounted) return;
+
+    WinnerCelebrationDialog.show(context, winnerBlock);
   }
 
   /// Tampilkan dialog Shake to Pick sekali per hari (per akun).
@@ -92,6 +125,8 @@ class _HomeScreenState extends State<HomeScreen> {
             _buildHeader(),
             const SizedBox(height: 20),
             const _ClockCard(),
+            const SizedBox(height: 20),
+            GiveawayHomeBanner(userName: widget.userName),
             const SizedBox(height: 26),
             _buildRoutineCard(),
             const SizedBox(height: 26),
