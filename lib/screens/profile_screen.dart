@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/ai_service.dart';
+import '../services/routine_service.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/profile_avatar.dart';
+import 'daily_routine_screen.dart';
 import 'edit_profile_screen.dart';
 import 'kesan_saran_screen.dart';
 
@@ -88,14 +90,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  void _comingSoon(String feature) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text('$feature segera hadir')),
-      );
-  }
-
   Future<void> _openEditProfile() async {
     final user = _user;
     if (user == null) return;
@@ -160,6 +154,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       AiService().clearChatSession();
+      RoutineService().onUserLogout();
       await _supabase.auth.signOut();
       if (!mounted) return;
 
@@ -248,15 +243,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const _MenuDivider(),
                   _MenuTile(
-                    icon: Icons.menu_book_outlined,
-                    title: 'Self-Care Journal',
-                    onTap: () => _comingSoon('Self-Care Journal'),
-                  ),
-                  const _MenuDivider(),
-                  _MenuTile(
-                    icon: Icons.emoji_events_outlined,
-                    title: 'Achievement',
-                    onTap: () => _comingSoon('Achievement'),
+                    icon: Icons.checklist_rounded,
+                    title: 'Daily Routine',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DailyRoutineScreen(),
+                        ),
+                      );
+                    },
                   ),
                   const _MenuDivider(),
                   _MenuTile(
