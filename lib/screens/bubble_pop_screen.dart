@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -905,7 +905,7 @@ class _BubblePopScreenState extends State<BubblePopScreen>
                                   ),
                                 ),
                               ),
-                    errorBuilder: (_, __, ___) => _emojiFallback(
+                    errorBuilder: (context, error, stackTrace) => _emojiFallback(
                       _fallbackEmojis[p.name.length % _fallbackEmojis.length],
                     ),
                   )
@@ -1115,13 +1115,12 @@ class _OutlinedText extends StatelessWidget {
     this.text, {
     this.size = 28,
     this.fill = Colors.white,
-    this.stroke = _deepPink,
   });
 
   final String text;
   final double size;
   final Color fill;
-  final Color stroke;
+  static const Color stroke = _deepPink;
 
   @override
   Widget build(BuildContext context) {
