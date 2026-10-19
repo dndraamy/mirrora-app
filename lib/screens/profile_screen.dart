@@ -8,6 +8,7 @@ import '../services/ai_service.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/profile_avatar.dart';
 import 'edit_profile_screen.dart';
+import 'kesan_saran_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -260,8 +261,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const _MenuDivider(),
                   _MenuTile(
                     icon: Icons.chat_bubble_outline_rounded,
-                    title: 'Saran & Kesan',
-                    onTap: () => _comingSoon('Saran & Kesan'),
+                    title: 'Kesan & Saran',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const KesanSaranScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
