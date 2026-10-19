@@ -10,6 +10,7 @@ import '../widgets/giveaway_home_banner.dart';
 import '../widgets/winner_celebration_dialog.dart';
 import 'bubble_pop_screen.dart';
 import 'favorite_products_screen.dart';
+import 'nearby_stores_screen.dart';
 import 'shake_to_pick_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -416,7 +417,12 @@ class _HomeScreenState extends State<HomeScreen> {
             iconColor: MirroraTheme.dustyRose,
             title: 'Toko Terdekat',
             subtitle: 'Cari toko kosmetik',
-            onTap: () => _comingSoon('Toko Terdekat'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NearbyStoresScreen(),
+              ),
+            ),
           ),
         ),
       ],
