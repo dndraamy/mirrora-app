@@ -100,9 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             _buildQuickAccess(),
             const SizedBox(height: 16),
-            _buildBeautyPick(),
-            const SizedBox(height: 16),
-            _buildInfoCards(),
+            _buildNearbyStoreBanner(),
           ],
         ),
       ),
@@ -297,100 +295,86 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ------------------------------------------------------------ BEAUTY PICK
-  Widget _buildBeautyPick() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: MirroraTheme.blushPink,
+  // -------------------------------------------------------- TOKO TERDEKAT BANNER
+  Widget _buildNearbyStoreBanner() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const NearbyStoresScreen(),
+          ),
+        ),
         borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Beauty Pick untukmu',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: MirroraTheme.charcoal,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Produk sesuai dengan jenis kulitmu',
-                  style: TextStyle(fontSize: 12, color: MirroraTheme.warmGray),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  height: 36,
-                  child: ElevatedButton(
-                    onPressed: () => _comingSoon('Rekomendasi produk'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      textStyle: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: MirroraTheme.blushPink,
+            borderRadius: BorderRadius.circular(22),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Cari Toko Terdekat',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: MirroraTheme.charcoal,
                       ),
                     ),
-                    child: const Text('Lihat Rekomendasi'),
-                  ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Temukan toko kosmetik & skincare di sekitarmu',
+                      style: TextStyle(fontSize: 12, color: MirroraTheme.warmGray),
+                    ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      height: 36,
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NearbyStoresScreen(),
+                          ),
+                        ),
+                        icon: const Icon(Icons.near_me_rounded, size: 15),
+                        label: const Text('Cari Toko'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          textStyle: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: MirroraTheme.white.withValues(alpha: 0.7),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.spa_rounded,
-              size: 34,
-              color: MirroraTheme.dustyRose,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ------------------------------------------------------------- INFO CARDS
-  Widget _buildInfoCards() {
-    return Row(
-      children: [
-        Expanded(
-          child: _InfoCard(
-            icon: Icons.emoji_events_outlined,
-            iconColor: MirroraTheme.softGold,
-            title: 'Achievement',
-            subtitle: 'Belum ada yang terbuka',
-            onTap: () => _comingSoon('Achievement'),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _InfoCard(
-            icon: Icons.storefront_outlined,
-            iconColor: MirroraTheme.dustyRose,
-            title: 'Toko Terdekat',
-            subtitle: 'Cari toko kosmetik',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const NearbyStoresScreen(),
               ),
-            ),
+              const SizedBox(width: 12),
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: MirroraTheme.white.withValues(alpha: 0.7),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  size: 34,
+                  color: MirroraTheme.dustyRose,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1077,66 +1061,6 @@ class _QuickAccessCard extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
                   color: MirroraTheme.charcoal,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: MirroraTheme.white,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: MirroraTheme.blushPink),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, size: 24, color: iconColor),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: MirroraTheme.charcoal,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: MirroraTheme.warmGray,
                 ),
               ),
             ],
