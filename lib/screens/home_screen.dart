@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/routine_model.dart';
 import '../services/giveaway_service.dart';
+import '../services/routine_service.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/giveaway_home_banner.dart';
 import '../widgets/winner_celebration_dialog.dart';
 import 'bubble_pop_screen.dart';
+import 'daily_routine_screen.dart';
 import 'favorite_products_screen.dart';
 import 'nearby_stores_screen.dart';
 import 'shake_to_pick_screen.dart';
@@ -22,27 +25,14 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _RoutineItem {
-  _RoutineItem(this.title, {this.done = false});
-
-  final String title;
-  bool done;
-}
-
 class _HomeScreenState extends State<HomeScreen> {
-  final List<_RoutineItem> _routines = [
-    _RoutineItem('Morning Skincare', done: true),
-    _RoutineItem('Minum Air Putih', done: true),
-    _RoutineItem('Hair Care'),
-    _RoutineItem('Night Skincare'),
-  ];
-
-  int get _doneCount => _routines.where((r) => r.done).length;
+  final RoutineService _routineService = RoutineService();
 
   // ── Lifecycle ──────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
+    _routineService.addListener(_onRoutineUpdated);
     // Tampilkan daily prompt, refresh voucher count, & cek pemenang giveaway setelah frame pertama selesai di-render
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final uid = Supabase.instance.client.auth.currentUser?.id ?? 'user_${widget.userName.toLowerCase()}';
@@ -50,6 +40,16 @@ class _HomeScreenState extends State<HomeScreen> {
       _maybeShowDailyPrompt();
       _checkWinnerCelebration();
     });
+  }
+
+  @override
+  void dispose() {
+    _routineService.removeListener(_onRoutineUpdated);
+    super.dispose();
+  }
+
+  void _onRoutineUpdated() {
+    if (mounted) setState(() {});
   }
 
   /// Cek apakah akun user yang login adalah pemenang giveaway blockchain
@@ -104,10 +104,6 @@ class _HomeScreenState extends State<HomeScreen> {
       barrierDismissible: true,
       builder: (_) => const ShakeToPickPromptDialog(),
     );
-  }
-
-  void _toggleRoutine(_RoutineItem item) {
-    setState(() => item.done = !item.done);
   }
 
   void _comingSoon(String feature) {
@@ -526,106 +522,277 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // --------------------------------------------------------------- ROUTINE
   Widget _buildRoutineCard() {
-    final total = _routines.length;
+    return ListenableBuilder(
+      listenable: _routineService,
+      builder: (context, _) {
+        final routines = _routineService.routines;
+        final total = _routineService.totalCount;
+        final doneCount = _routineService.completedCount;
+        final progress = _routineService.progress;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _SectionTitle('Rutinitas Hari Ini'),
-            Text(
-              '$_doneCount/$total selesai',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: MirroraTheme.success,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const _SectionTitle('Rutinitas Hari Ini'),
+                Row(
+                  children: [
+                    if (total > 0) ...[
+                      Text(
+                        '$doneCount/$total selesai',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: MirroraTheme.success,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    InkWell(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const DailyRoutineScreen(),
+                        ),
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Text(
+                              'Atur',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: MirroraTheme.dustyRose,
+                              ),
+                            ),
+                            SizedBox(width: 2),
+                            Icon(
+                              Icons.arrow_forward_ios_rounded,
+                              size: 11,
+                              color: MirroraTheme.dustyRose,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Material(
+              color: MirroraTheme.white,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: const BorderSide(color: MirroraTheme.blushPink),
               ),
+              child: total == 0
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 24,
+                      ),
+                      child: Center(
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                color: MirroraTheme.blushPink
+                                    .withValues(alpha: 0.6),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.calendar_today_rounded,
+                                size: 24,
+                                color: MirroraTheme.dustyRose,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Tambahkan rutinitas harianmu',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: MirroraTheme.charcoal,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Mulai catat rutinitas skincare pagi & malam kamu di sini',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: MirroraTheme.warmGray,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const DailyRoutineScreen(),
+                                ),
+                              ),
+                              icon: const Icon(Icons.add_rounded, size: 18),
+                              label: const Text('Tambahkan Rutinitas'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: MirroraTheme.dustyRose,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 10,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 6,
+                              backgroundColor: MirroraTheme.blushPink,
+                              valueColor: const AlwaysStoppedAnimation(
+                                MirroraTheme.dustyRose,
+                              ),
+                            ),
+                          ),
+                        ),
+                        for (int i = 0; i < routines.length; i++) ...[
+                          _buildRoutineTile(routines[i]),
+                          if (i != routines.length - 1)
+                            const Divider(
+                              height: 1,
+                              indent: 16,
+                              endIndent: 16,
+                              color: MirroraTheme.blushPink,
+                            ),
+                        ],
+                      ],
+                    ),
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: MirroraTheme.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: MirroraTheme.blushPink),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: LinearProgressIndicator(
-                    value: total == 0 ? 0 : _doneCount / total,
-                    minHeight: 6,
-                    backgroundColor: MirroraTheme.blushPink,
-                    valueColor: const AlwaysStoppedAnimation(
-                      MirroraTheme.dustyRose,
-                    ),
-                  ),
-                ),
-              ),
-              for (int i = 0; i < _routines.length; i++) ...[
-                _buildRoutineTile(_routines[i]),
-                if (i != _routines.length - 1)
-                  const Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: MirroraTheme.blushPink,
-                  ),
-              ],
-            ],
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _buildRoutineTile(_RoutineItem item) {
-    return InkWell(
-      onTap: () => _toggleRoutine(item),
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                color: item.done ? MirroraTheme.success : Colors.transparent,
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: item.done
-                      ? MirroraTheme.success
-                      : MirroraTheme.warmGray.withValues(alpha: 0.4),
-                  width: 1.5,
+  Widget _buildRoutineTile(DailyRoutine item) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _routineService.toggleRoutine(item.id),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _routineService.toggleRoutine(item.id),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: item.isCompleted
+                        ? MirroraTheme.success
+                        : Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: item.isCompleted
+                          ? MirroraTheme.success
+                          : MirroraTheme.warmGray.withValues(alpha: 0.45),
+                      width: 2.0,
+                    ),
+                  ),
+                  child: item.isCompleted
+                      ? const Icon(Icons.check_rounded,
+                          size: 17, color: MirroraTheme.white)
+                      : null,
                 ),
               ),
-              child: item.done
-                  ? const Icon(Icons.check, size: 16, color: MirroraTheme.white)
-                  : null,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                item.title,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: item.done
-                      ? MirroraTheme.warmGray
-                      : MirroraTheme.charcoal,
-                  decoration: item.done ? TextDecoration.lineThrough : null,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: item.isCompleted
+                            ? MirroraTheme.warmGray
+                            : MirroraTheme.charcoal,
+                        decoration: item.isCompleted
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                    if (item.note != null && item.note!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        item.note!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: MirroraTheme.warmGray.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: item.category == 'Pagi'
+                      ? const Color(0xFFFFF3E0)
+                      : const Color(0xFFEDE7F6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  item.category == 'Pagi' ? '☀️ Pagi' : '🌙 Malam',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: item.category == 'Pagi'
+                        ? const Color(0xFFE65100)
+                        : const Color(0xFF512DA8),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
