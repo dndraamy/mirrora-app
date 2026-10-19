@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/mirrora_theme.dart';
 import 'bubble_pop_screen.dart';
+import 'favorite_products_screen.dart';
 import 'shake_to_pick_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -281,9 +282,14 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: _QuickAccessCard(
-            icon: Icons.favorite_border_rounded,
+            icon: Icons.favorite_rounded,
             label: 'Produk Favorit',
-            onTap: () => _comingSoon('Produk Favorit'),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const FavoriteProductsScreen(),
+              ),
+            ),
           ),
         ),
       ],
