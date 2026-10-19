@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/product_model.dart';
 import '../services/beauty_api_service.dart';
 import '../services/currency_service.dart';
+import '../services/favorites_service.dart';
 import '../theme/mirrora_theme.dart';
 import 'ai_assistant_screen.dart';
+import 'favorite_products_screen.dart';
 
 /// Screen Explore: Katalog produk skincare dan makeup
 /// Menyajikan produk Brand Lokal (Indonesia) dan Brand Internasional (via API)
@@ -17,6 +19,7 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   final BeautyApiService _apiService = BeautyApiService();
   final CurrencyService _currencyService = CurrencyService();
+  final FavoritesService _favoritesService = FavoritesService();
   final TextEditingController _searchController = TextEditingController();
 
   ProductOrigin _selectedOrigin = ProductOrigin.all;
@@ -27,19 +30,24 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   bool _isLoading = true;
   List<CatalogProduct> _products = [];
-  final Set<String> _favoriteProductIds = {};
 
   @override
   void initState() {
     super.initState();
     _currentCurrency = _currencyService.detectUserCurrency();
+    _favoritesService.addListener(_onFavoritesChanged);
     _loadCatalog();
   }
 
   @override
   void dispose() {
+    _favoritesService.removeListener(_onFavoritesChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onFavoritesChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadCatalog({bool forceRefresh = false}) async {
@@ -70,25 +78,22 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _loadCatalog();
   }
 
-  void _toggleFavorite(String productId) {
-    setState(() {
-      if (_favoriteProductIds.contains(productId)) {
-        _favoriteProductIds.remove(productId);
-      } else {
-        _favoriteProductIds.add(productId);
-      }
-    });
+  Future<void> _toggleFavorite(CatalogProduct product) async {
+    final isNowFav = await _favoritesService.toggleFavorite(product);
 
+    if (!mounted) return;
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          _favoriteProductIds.contains(productId)
-              ? '✨ Produk ditambahkan ke Wishlist!'
-              : 'Produk dihapus dari Wishlist.',
+          isNowFav
+              ? '✨ "${product.name}" ditambahkan ke Favorit!'
+              : '"${product.name}" dihapus dari Favorit.',
           style: const TextStyle(fontWeight: FontWeight.w600),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
-        duration: const Duration(seconds: 1),
+        duration: const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
         backgroundColor: MirroraTheme.charcoal,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -281,11 +286,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final isFav = _favoriteProductIds.contains(product.id);
         AppCurrency selectedCurrency = _currentCurrency;
         bool isCurrencyExpanded = false;
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final isFav = _favoritesService.isFavorite(product.id);
             return DraggableScrollableSheet(
               initialChildSize: 0.85,
               minChildSize: 0.5,
@@ -380,7 +385,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
                             child: Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: () => _toggleFavorite(product.id),
+                                onTap: () async {
+                                  await _toggleFavorite(product);
+                                  setSheetState(() {});
+                                },
                                 borderRadius: BorderRadius.circular(24),
                                 child: Container(
                                   padding: const EdgeInsets.all(8),
@@ -901,9 +909,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: () {
-                            _toggleFavorite(product.id);
-                            Navigator.pop(ctx);
+                          onPressed: () async {
+                            await _toggleFavorite(product);
+                            setSheetState(() {});
                           },
                           icon: Icon(
                             isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
@@ -911,7 +919,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                             color: MirroraTheme.white,
                           ),
                           label: Text(
-                            isFav ? 'Di Wishlist' : 'Simpan Wishlist',
+                            isFav ? 'Di Favorit' : 'Simpan Favorit',
                             style: const TextStyle(fontWeight: FontWeight.w700, color: MirroraTheme.white),
                           ),
                           style: ElevatedButton.styleFrom(
@@ -979,20 +987,77 @@ class _ExploreScreenState extends State<ExploreScreen> {
                               ),
                             ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: MirroraTheme.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: MirroraTheme.dustyRose.withValues(alpha: 0.12),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 3),
+                          Row(
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const FavoriteProductsScreen(),
+                                    ),
+                                  );
+                                },
+                                child: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: MirroraTheme.white,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: MirroraTheme.dustyRose.withValues(alpha: 0.12),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Icon(Icons.favorite_rounded, color: Colors.redAccent, size: 20),
+                                    ),
+                                    if (_favoritesService.count > 0)
+                                      Positioned(
+                                        top: -2,
+                                        right: -2,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(
+                                            color: MirroraTheme.dustyRose,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                          child: Text(
+                                            '${_favoritesService.count}',
+                                            style: const TextStyle(
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            child: const Icon(Icons.auto_awesome, color: MirroraTheme.dustyRose, size: 20),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: MirroraTheme.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: MirroraTheme.dustyRose.withValues(alpha: 0.12),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(Icons.auto_awesome, color: MirroraTheme.dustyRose, size: 20),
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1234,15 +1299,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 2, 20, 10),
                   child: Row(
                     children: [
-                      Text(
-                        'Menampilkan ${_products.length} produk',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: MirroraTheme.charcoal,
+                      Expanded(
+                        child: Text(
+                          '${_products.length} produk',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: MirroraTheme.charcoal,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       // Currency Selector Button
                       InkWell(
                         onTap: _showCurrencyPickerSheet,
@@ -1489,7 +1558,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Widget _buildGridCard(CatalogProduct product) {
-    final isFav = _favoriteProductIds.contains(product.id);
+    final isFav = _favoritesService.isFavorite(product.id);
     return GestureDetector(
       onTap: () => _showProductDetails(product),
       child: Container(
@@ -1557,7 +1626,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () => _toggleFavorite(product.id),
+                      onTap: () => _toggleFavorite(product),
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
@@ -1673,7 +1742,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final product = _products[index];
-            final isFav = _favoriteProductIds.contains(product.id);
+            final isFav = _favoritesService.isFavorite(product.id);
             return GestureDetector(
               onTap: () => _showProductDetails(product),
               child: Container(
@@ -1788,7 +1857,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                   ),
                                   const SizedBox(width: 10),
                                   GestureDetector(
-                                    onTap: () => _toggleFavorite(product.id),
+                                    onTap: () => _toggleFavorite(product),
                                     child: Icon(
                                       isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                                       color: isFav ? Colors.redAccent : MirroraTheme.charcoal,
