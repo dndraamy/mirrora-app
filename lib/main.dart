@@ -1,10 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'screens/auth_screen.dart';
+import 'screens/reset_password_screen.dart';
 import 'screens/splash_screen.dart';
 import 'theme/mirrora_theme.dart';
-import 'screens/auth_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,17 +23,49 @@ Future<void> main() async {
   runApp(const MirroraApp());
 }
 
-class MirroraApp extends StatelessWidget {
+class MirroraApp extends StatefulWidget {
   const MirroraApp({super.key});
+
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
+  @override
+  State<MirroraApp> createState() => _MirroraAppState();
+}
+
+class _MirroraAppState extends State<MirroraApp> {
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        MirroraApp.navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: MirroraApp.navigatorKey,
       title: 'Mirrora',
       debugShowCheckedModeBanner: false,
       theme: MirroraTheme.lightTheme,
       home: const SplashScreen(),
-      routes: {'/auth': (_) => const AuthScreen()},
+      routes: {
+        '/auth': (_) => const AuthScreen(),
+        '/reset-password': (_) => const ResetPasswordScreen(),
+      },
     );
   }
 }

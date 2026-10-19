@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/mirrora_theme.dart';
 import 'about_app_screen.dart';
+import 'change_password_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -235,12 +236,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.lock_outline_rounded,
                   title: 'Ubah Password',
                   subtitle: 'Perbarui kata sandi akunmu',
-                  onTap: () => _open(
-                    const _PlaceholderTab(
-                      title: 'Ubah Password',
-                      icon: Icons.lock_outline_rounded,
-                    ),
-                  ),
+                  onTap: () => _open(const ChangePasswordScreen()),
                 ),
               ],
             ),

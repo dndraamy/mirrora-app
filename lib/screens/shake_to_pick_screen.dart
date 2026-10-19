@@ -921,7 +921,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
 
     return AnimatedBuilder(
       animation: _pulseCtrl,
-      builder: (_, __) {
+      builder: (context, child) {
         final t = _pulseCtrl.value;
         final pulse = sin(t * 2 * pi);
         final scl = 1.0 + pulse * (isShaking ? 0.032 : 0.018);

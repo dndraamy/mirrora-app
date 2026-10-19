@@ -131,6 +131,31 @@ class AuthService {
     return current;
   }
 
+  /// Ubah password user yang sedang login dengan verifikasi password lama & enkripsi BCrypt.
+  Future<void> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async {
+    final current = await currentUser();
+    if (current == null) {
+      throw AuthException('Sesi berakhir, silakan login ulang');
+    }
+    final email = current['email'] as String;
+    final currentHash = current['passwordHash'] as String?;
+    if (currentHash != null && !BCrypt.checkpw(oldPassword, currentHash)) {
+      throw AuthException('Kata sandi lama tidak sesuai');
+    }
+    if (oldPassword == newPassword) {
+      throw AuthException('Kata sandi baru tidak boleh sama dengan kata sandi lama');
+    }
+    if (newPassword.length < 8) {
+      throw AuthException('Kata sandi baru minimal 8 karakter');
+    }
+
+    current['passwordHash'] = BCrypt.hashpw(newPassword, BCrypt.gensalt());
+    await _box.put(email, current);
+  }
+
   // ------------------------------------------------------------ BIOMETRIC
   // Email akun yang fingerprint-nya aktif disimpan di Hive (settingsBox),
   // terpisah dari session, supaya tetap ada setelah logout.

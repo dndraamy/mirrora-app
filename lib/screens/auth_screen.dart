@@ -6,7 +6,9 @@ import 'package:local_auth/local_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/mirrora_theme.dart';
+import '../widgets/forgot_password_sheet.dart';
 import 'main_navigation.dart';
+import 'reset_password_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -97,7 +99,12 @@ class _AuthScreenState extends State<AuthScreen> {
   // → kita tampilkan dialog sukses lalu navigasi ke home.
   void _onAuthStateChanged(AuthState state) {
     if (!mounted) return;
-    if (state.event == AuthChangeEvent.signedIn && _awaitingConfirmation) {
+    if (state.event == AuthChangeEvent.passwordRecovery) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
+      );
+    } else if (state.event == AuthChangeEvent.signedIn && _awaitingConfirmation) {
       final user = state.session?.user;
       if (user == null) return;
       _authSub?.cancel();
@@ -393,25 +400,11 @@ class _AuthScreenState extends State<AuthScreen> {
   // FORGOT PASSWORD
   // ────────────────────────────────────────────────────────────
 
-  Future<void> _forgotPassword() async {
-    final email = _identityController.text.trim();
-
-    if (email.isEmpty ||
-        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
-      _showMessage('Masukkan email yang valid terlebih dahulu.');
-      return;
-    }
-
-    try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(email);
-      _showMessage(
-        'Jika email terdaftar, tautan reset akan dikirim ke email kamu.',
-      );
-    } on AuthException catch (e) {
-      _showMessage(_friendlyAuthError(e.message));
-    } catch (_) {
-      _showMessage('Gagal mengirim permintaan reset password.');
-    }
+  void _forgotPassword() {
+    ForgotPasswordSheet.show(
+      context,
+      initialEmail: _identityController.text.trim(),
+    );
   }
 
   // ────────────────────────────────────────────────────────────

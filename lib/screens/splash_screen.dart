@@ -9,6 +9,7 @@ import 'biometric_login_screen.dart';
 import 'main_navigation.dart';
 import 'onboarding_screen.dart';
 import 'auth_screen.dart';
+import 'reset_password_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -67,7 +68,14 @@ class _SplashScreenState extends State<SplashScreen> {
     // menukar token sebelum timer habis, langsung navigasi.
     _authSub = Supabase.instance.client.auth.onAuthStateChange.listen(
       (data) {
-        if (data.event == AuthChangeEvent.signedIn) {
+        if (data.event == AuthChangeEvent.passwordRecovery) {
+          _authSub?.cancel();
+          if (!mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
+          );
+        } else if (data.event == AuthChangeEvent.signedIn) {
           _authSub?.cancel();
           _navigateBasedOnSession();
         }
