@@ -1,11 +1,53 @@
 import 'package:flutter/material.dart';
 
+import '../services/admin_auth_service.dart';
 import '../theme/mirrora_theme.dart';
 
-class AboutScreen extends StatelessWidget {
+class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
 
   static const String version = '1.0.0';
+
+  @override
+  State<AboutScreen> createState() => _AboutScreenState();
+}
+
+class _AboutScreenState extends State<AboutScreen> {
+  int _secretTaps = 0;
+  DateTime? _lastTapTime;
+
+  void _handleSecretTap() {
+    final now = DateTime.now();
+    if (_lastTapTime == null || now.difference(_lastTapTime!) > const Duration(seconds: 3)) {
+      _secretTaps = 1;
+    } else {
+      _secretTaps++;
+    }
+    _lastTapTime = now;
+
+    if (_secretTaps == 3) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Kamu 2 langkah lagi dari Portal Owner...'),
+            duration: Duration(milliseconds: 1200),
+          ),
+        );
+    } else if (_secretTaps == 4) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Kamu 1 langkah lagi dari Portal Owner...'),
+            duration: Duration(milliseconds: 1200),
+          ),
+        );
+    } else if (_secretTaps >= 5) {
+      _secretTaps = 0;
+      AdminAuthService().authenticateAndOpenPortal(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,21 +98,25 @@ class AboutScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: MirroraTheme.white.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Versi $version',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: MirroraTheme.dustyRose,
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _handleSecretTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: MirroraTheme.white.withValues(alpha: 0.8),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text(
+                          'Versi ${AboutScreen.version}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: MirroraTheme.dustyRose,
+                          ),
                         ),
                       ),
                     ),
@@ -95,31 +141,35 @@ class AboutScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(22),
                   side: const BorderSide(color: MirroraTheme.blushPink),
                 ),
-                child: const Column(
+                child: Column(
                   children: [
-                    _InfoRow(
-                      icon: Icons.info_outline_rounded,
-                      label: 'Versi',
-                      value: version,
+                    InkWell(
+                      onTap: _handleSecretTap,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                      child: const _InfoRow(
+                        icon: Icons.info_outline_rounded,
+                        label: 'Versi',
+                        value: AboutScreen.version,
+                      ),
                     ),
-                    Divider(
+                    const Divider(
                       height: 1,
                       indent: 16,
                       endIndent: 16,
                       color: MirroraTheme.blushPink,
                     ),
-                    _InfoRow(
+                    const _InfoRow(
                       icon: Icons.phone_android_rounded,
                       label: 'Dibangun dengan',
                       value: 'Flutter',
                     ),
-                    Divider(
+                    const Divider(
                       height: 1,
                       indent: 16,
                       endIndent: 16,
                       color: MirroraTheme.blushPink,
                     ),
-                    _InfoRow(
+                    const _InfoRow(
                       icon: Icons.storage_rounded,
                       label: 'Penyimpanan data',
                       value: 'Lokal (Hive)',

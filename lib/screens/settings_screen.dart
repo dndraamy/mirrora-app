@@ -3,6 +3,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/admin_auth_service.dart';
 import '../theme/mirrora_theme.dart';
 import 'about_app_screen.dart';
 import 'change_password_screen.dart';
@@ -44,6 +45,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _open(Widget page) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+  }
+
+  int _secretTapCount = 0;
+  DateTime? _lastSecretTap;
+
+  void _onSecretTap() {
+    final now = DateTime.now();
+    if (_lastSecretTap == null || now.difference(_lastSecretTap!) > const Duration(seconds: 3)) {
+      _secretTapCount = 1;
+    } else {
+      _secretTapCount++;
+    }
+    _lastSecretTap = now;
+
+    if (_secretTapCount == 3) {
+      _showMessage('Kamu 2 langkah lagi dari Portal Owner...');
+    } else if (_secretTapCount == 4) {
+      _showMessage('Kamu 1 langkah lagi dari Portal Owner...');
+    } else if (_secretTapCount >= 5) {
+      _secretTapCount = 0;
+      AdminAuthService().authenticateAndOpenPortal(context);
+    }
+  }
+
+  void _openAdminPortal() {
+    AdminAuthService().authenticateAndOpenPortal(context);
   }
 
   Future<void> _toggleBiometric(bool enable) async {
@@ -311,8 +338,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: Icons.info_outline_rounded,
                   title: 'Tentang Aplikasi',
                   subtitle: 'Versi ${AboutScreen.version}',
-                  onTap: () => _open(const AboutScreen()),
+                  onTap: () {
+                    _onSecretTap();
+                    _open(const AboutScreen());
+                  },
                 ),
+                if (!AdminAuthService().isStealthMode())
+                  _SettingTile(
+                    icon: Icons.admin_panel_settings_outlined,
+                    title: 'Portal Undian (Owner / Admin) 🛡️',
+                    subtitle: 'Terlindungi Biometrik & SHA-256',
+                    onTap: _openAdminPortal,
+                  ),
               ],
             ),
           ],
