@@ -46,4 +46,8 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+# Secrets
+.env
 env.json
+supabase/.env
+*.zip

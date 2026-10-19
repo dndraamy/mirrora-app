@@ -124,6 +124,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       );
       if (picked != null) {
         final bytes = await picked.readAsBytes();
+        if (!mounted) return;
         setState(() {
           _selectedImageBytes = bytes;
           _selectedImageName = picked.name;
@@ -142,6 +143,9 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
   }
 
   Future<void> _handleSendMessage([String? predefinedText]) async {
+    // Cegah pesan terkirim dobel saat AI masih menjawab
+    if (_isLoading) return;
+
     final text = (predefinedText ?? _textController.text).trim();
     final imageBytes = _selectedImageBytes;
 
@@ -171,6 +175,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         imageBytes: imageBytes,
         existingHistory: _messages,
       );
+      if (!mounted) return;
 
       final cleanResponse = _cleanText(aiResponse);
 
@@ -188,21 +193,28 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
       _scrollToBottom();
       await _aiService.saveChatHistory(_messages, widget.userName);
     } catch (e) {
+      debugPrint('AI ERROR: $e');
+      if (!mounted) return;
       setState(() => _isLoading = false);
 
       String friendlyError =
           'Maaf, terjadi kendala saat menghubungkan ke AI. Silakan coba kirim ulang pesanmu ya.';
       final errorString = e.toString().toLowerCase();
 
-      if (errorString.contains('503') ||
+      if (errorString.contains('401')) {
+        friendlyError =
+            'Sesi login kamu sudah berakhir. Silakan login ulang lalu coba lagi.';
+      } else if (errorString.contains('503') ||
           errorString.contains('high demand') ||
-          errorString.contains('unavailable')) {
+          errorString.contains('unavailable') ||
+          errorString.contains('sibuk')) {
         friendlyError =
             'Server AI sedang sangat ramai pengguna saat ini. Mohon tunggu beberapa saat dan coba kirim kembali pertanyaanmu ya.';
       } else if (errorString.contains('429') ||
-          errorString.contains('quota')) {
+          errorString.contains('quota') ||
+          errorString.contains('batas')) {
         friendlyError =
-            'Batas kuota AI tercapai sementara. Silakan coba kembali beberapa saat lagi.';
+            'Batas pemakaian AI tercapai sementara. Silakan coba kembali nanti ya.';
       }
 
       _showToast(friendlyError);
@@ -212,10 +224,10 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
         text: friendlyError,
         isUser: false,
         timestamp: DateTime.now(),
+        isError: true, // tidak disimpan dan tidak dikirim ke AI
       );
       setState(() => _messages.add(errorMsg));
       _scrollToBottom();
-      await _aiService.saveChatHistory(_messages, widget.userName);
     }
   }
 
@@ -245,6 +257,7 @@ class _AiAssistantScreenState extends State<AiAssistantScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               await _aiService.clearChatHistory(widget.userName);
+              if (!mounted) return;
               setState(() {
                 _initWelcomeMessage();
                 _clearSelectedImage();
