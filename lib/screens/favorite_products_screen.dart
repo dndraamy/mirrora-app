@@ -25,13 +25,19 @@ class _FavoriteProductsScreenState extends State<FavoriteProductsScreen> {
   void initState() {
     super.initState();
     _currentCurrency = _currencyService.detectUserCurrency();
+    _currencyService.addListener(_onCurrencyUpdated);
     _favoritesService.addListener(_onFavoritesUpdated);
   }
 
   @override
   void dispose() {
+    _currencyService.removeListener(_onCurrencyUpdated);
     _favoritesService.removeListener(_onFavoritesUpdated);
     super.dispose();
+  }
+
+  void _onCurrencyUpdated() {
+    if (mounted) setState(() {});
   }
 
   void _onFavoritesUpdated() {

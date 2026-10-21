@@ -45,7 +45,7 @@ class GiveawayParticipant {
   }
 }
 
-/// Blok Blockchain lokal untuk mengunci data pemenang secara permanen (Immutable)
+/// Blok Blockchain lokal untuk mengunci data pemenang secara permanen
 class BlockchainBlock {
   const BlockchainBlock({
     required this.index,

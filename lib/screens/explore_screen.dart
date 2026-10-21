@@ -35,15 +35,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
   void initState() {
     super.initState();
     _currentCurrency = _currencyService.detectUserCurrency();
+    _currencyService.addListener(_onCurrencyUpdated);
     _favoritesService.addListener(_onFavoritesChanged);
     _loadCatalog();
   }
 
   @override
   void dispose() {
+    _currencyService.removeListener(_onCurrencyUpdated);
     _favoritesService.removeListener(_onFavoritesChanged);
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onCurrencyUpdated() {
+    if (mounted) setState(() {});
   }
 
   void _onFavoritesChanged() {

@@ -1,6 +1,7 @@
-import 'dart:ui';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http;
 
 /// Mata uang yang didukung untuk konversi di katalog Mirrora
 enum AppCurrency {
@@ -25,23 +26,118 @@ enum AppCurrency {
   final String country;
 }
 
-/// Service untuk menangani nilai tukar mata uang & deteksi lokasi user
-class CurrencyService {
+/// Service untuk menangani nilai tukar mata uang secara real-time & deteksi lokasi user
+class CurrencyService extends ChangeNotifier {
   static final CurrencyService _instance = CurrencyService._internal();
   factory CurrencyService() => _instance;
   CurrencyService._internal();
 
   static const String _savedCurrencyKey = 'selected_currency_code';
+  static const String _cachedRatesKey = 'cached_exchange_rates_to_idr';
+  static const String _lastFetchedTimeKey = 'last_rates_fetched_time_ms';
 
-  /// Kurs per 1 unit mata uang asing ke IDR (Rupiah)
-  /// Nilai estimasi kurs pasar riil
-  static const Map<AppCurrency, double> ratesToIdr = {
+  /// Fallback kurs per 1 unit mata uang asing ke IDR (Rupiah) jika offline
+  static const Map<AppCurrency, double> _fallbackRatesToIdr = {
     AppCurrency.idr: 1.0,
-    AppCurrency.usd: 16200.0, // 1 USD ≈ Rp 16.200
-    AppCurrency.jpy: 108.0,   // 1 JPY ≈ Rp 108
-    AppCurrency.eur: 17600.0, // 1 EUR ≈ Rp 17.600
-    AppCurrency.krw: 11.8,    // 1 KRW ≈ Rp 11,8
+    AppCurrency.usd: 16000.0, // 1 USD ≈ Rp 16.000
+    AppCurrency.jpy: 114.0,   // 1 JPY ≈ Rp 114
+    AppCurrency.eur: 20200.0, // 1 EUR ≈ Rp 20.200
+    AppCurrency.krw: 13.6,    // 1 KRW ≈ Rp 13,6
   };
+
+  /// Kurs aktif saat ini (didapat dari API / cache Hive / fallback)
+  final Map<AppCurrency, double> _activeRatesToIdr = Map.from(_fallbackRatesToIdr);
+
+  bool _isFetching = false;
+  DateTime? _lastUpdated;
+
+  Map<AppCurrency, double> get ratesToIdr => Map.unmodifiable(_activeRatesToIdr);
+  DateTime? get lastUpdated => _lastUpdated;
+  bool get isFetching => _isFetching;
+
+  /// Inisialisasi service: muat cache lokal lalu fetch kurs terbaru di background
+  Future<void> init() async {
+    _loadFromCache();
+    // Fetch kurs real-time terbaru secara asynchronous di background
+    fetchLiveRates();
+  }
+
+  /// Memuat kurs tersimpan dari Hive jika ada
+  void _loadFromCache() {
+    try {
+      if (Hive.isBoxOpen('settingsBox')) {
+        final box = Hive.box('settingsBox');
+        final cached = box.get(_cachedRatesKey);
+        final lastMs = box.get(_lastFetchedTimeKey) as int?;
+
+        if (lastMs != null) {
+          _lastUpdated = DateTime.fromMillisecondsSinceEpoch(lastMs);
+        }
+
+        if (cached is Map) {
+          for (final c in AppCurrency.values) {
+            final val = cached[c.code];
+            if (val != null) {
+              final doubleRate = (val as num).toDouble();
+              if (doubleRate > 0) {
+                _activeRatesToIdr[c] = doubleRate;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Mengambil data kurs mata uang real-time dari Public Exchange Rate API
+  /// (open.er-api.com)
+  Future<bool> fetchLiveRates() async {
+    if (_isFetching) return false;
+    _isFetching = true;
+
+    try {
+      final response = await http
+          .get(Uri.parse('https://open.er-api.com/v6/latest/USD'))
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        final rates = data['rates'] as Map<String, dynamic>?;
+
+        if (rates != null && rates.containsKey('IDR')) {
+          final usdToIdr = (rates['IDR'] as num).toDouble();
+          final usdToEur = (rates['EUR'] as num?)?.toDouble() ?? 1.0;
+          final usdToJpy = (rates['JPY'] as num?)?.toDouble() ?? 1.0;
+          final usdToKrw = (rates['KRW'] as num?)?.toDouble() ?? 1.0;
+
+          _activeRatesToIdr[AppCurrency.idr] = 1.0;
+          _activeRatesToIdr[AppCurrency.usd] = usdToIdr;
+          _activeRatesToIdr[AppCurrency.eur] = usdToEur > 0 ? (usdToIdr / usdToEur) : _fallbackRatesToIdr[AppCurrency.eur]!;
+          _activeRatesToIdr[AppCurrency.jpy] = usdToJpy > 0 ? (usdToIdr / usdToJpy) : _fallbackRatesToIdr[AppCurrency.jpy]!;
+          _activeRatesToIdr[AppCurrency.krw] = usdToKrw > 0 ? (usdToIdr / usdToKrw) : _fallbackRatesToIdr[AppCurrency.krw]!;
+
+          _lastUpdated = DateTime.now();
+
+          // Simpan ke Hive cache agar offline tetap akurat
+          if (Hive.isBoxOpen('settingsBox')) {
+            final box = Hive.box('settingsBox');
+            final cacheMap = <String, double>{};
+            _activeRatesToIdr.forEach((k, v) => cacheMap[k.code] = v);
+            await box.put(_cachedRatesKey, cacheMap);
+            await box.put(_lastFetchedTimeKey, _lastUpdated!.millisecondsSinceEpoch);
+          }
+
+          notifyListeners();
+          return true;
+        }
+      }
+    } catch (e) {
+      debugPrint('CurrencyService live fetch failed: $e. Using cached/fallback rates.');
+    } finally {
+      _isFetching = false;
+    }
+    return false;
+  }
 
   /// Mendeteksi mata uang default secara otomatis berdasarkan wilayah/perangkat user
   AppCurrency detectUserCurrency() {
@@ -68,8 +164,6 @@ class CurrencyService {
       final language = locale.languageCode.toLowerCase();
 
       // PRIORITAS UTAMA: Wilayah Indonesia
-      // Seringkali HP di Indonesia diatur sistem bahasanya ke English (United States),
-      // sehingga locale.countryCode menjadi 'US'. Namun zona waktu HP tetap WIB/WITA/WIT (+7/+8/+9).
       final isIndonesianTz = offsetHours == 7 ||
           offsetHours == 8 ||
           offsetHours == 9 ||
@@ -99,15 +193,11 @@ class CurrencyService {
         return AppCurrency.eur;
       }
 
-      // Deteksi Amerika Serikat:
-      // HANYA jika country == 'US' DAN zona waktu benar-benar di benua Amerika (UTC-4 s.d UTC-11).
-      // Jangan pernah default ke USD jika zona waktu user berada di Asia/Indonesia (+7/+8/+9).
+      // Deteksi Amerika Serikat
       if (country == 'US' && (offsetHours <= -4 && offsetHours >= -11)) {
         return AppCurrency.usd;
       }
-    } catch (_) {
-      // Abaikan error dan gunakan default IDR
-    }
+    } catch (_) {}
 
     // Default mutlak aplikasi Mirrora adalah Rupiah (Indonesia)
     return AppCurrency.idr;
@@ -118,6 +208,7 @@ class CurrencyService {
     try {
       if (Hive.isBoxOpen('settingsBox')) {
         await Hive.box('settingsBox').put(_savedCurrencyKey, currency.code);
+        notifyListeners();
       }
     } catch (_) {}
   }
@@ -125,7 +216,7 @@ class CurrencyService {
   /// Mengonversi nilai dari IDR ke mata uang target
   double convertFromIdr(double amountIdr, AppCurrency target) {
     if (target == AppCurrency.idr) return amountIdr;
-    final rate = ratesToIdr[target] ?? 1.0;
+    final rate = _activeRatesToIdr[target] ?? _fallbackRatesToIdr[target] ?? 1.0;
     return amountIdr / rate;
   }
 
@@ -158,16 +249,12 @@ class CurrencyService {
   /// 1 unit [from] = X unit [to].
   double getRate(AppCurrency from, AppCurrency to) {
     if (from == to) return 1.0;
-    final fromToIdr = ratesToIdr[from] ?? 1.0;
-    final toToIdr = ratesToIdr[to] ?? 1.0;
+    final fromToIdr = _activeRatesToIdr[from] ?? _fallbackRatesToIdr[from] ?? 1.0;
+    final toToIdr = _activeRatesToIdr[to] ?? _fallbackRatesToIdr[to] ?? 1.0;
     return fromToIdr / toToIdr;
   }
 
   /// Format kurs tukar dua arah yang dinamis antara mata uang asal (base) dan target.
-  /// Contoh:
-  /// - Base USD -> Target JPY: "1 USD ≈ ¥150 JPY • 1 JPY ≈ $0.0067 USD"
-  /// - Base IDR -> Target USD: "1 USD ≈ Rp 16.200 • Rp 10.000 ≈ $0.62 USD"
-  /// - Base EUR -> Target JPY: "1 EUR ≈ ¥163 JPY • 100 JPY ≈ €0.61 EUR"
   String getExchangeRateBetween(AppCurrency base, AppCurrency target) {
     if (base == target) {
       return 'Mata uang default wilayahmu (${base.name})';
@@ -175,7 +262,7 @@ class CurrencyService {
 
     // A. Jika salah satunya adalah IDR
     if (base == AppCurrency.idr) {
-      final rate = ratesToIdr[target] ?? 1.0;
+      final rate = _activeRatesToIdr[target] ?? _fallbackRatesToIdr[target] ?? 1.0;
       final rateStr = _formatWithSeparator(rate.round(), '.');
       final tenThousandVal = (10000.0 / rate);
       final tenThousandStr = tenThousandVal >= 1
@@ -185,7 +272,7 @@ class CurrencyService {
     }
 
     if (target == AppCurrency.idr) {
-      final rate = ratesToIdr[base] ?? 1.0;
+      final rate = _activeRatesToIdr[base] ?? _fallbackRatesToIdr[base] ?? 1.0;
       final rateStr = _formatWithSeparator(rate.round(), '.');
       final tenThousandVal = (10000.0 / rate);
       final tenThousandStr = tenThousandVal >= 1
@@ -194,7 +281,7 @@ class CurrencyService {
       return '1 ${base.code} ≈ Rp $rateStr • Rp 10.000 ≈ ${base.symbol}$tenThousandStr ${base.code}';
     }
 
-    // B. Antar mata uang non-IDR (contoh: USD ke JPY, USD ke EUR, EUR ke JPY, dsb.)
+    // B. Antar mata uang non-IDR (contoh: USD ke JPY, USD ke EUR, dsb.)
     final rateBaseToTarget = getRate(base, target);
     final rateTargetToBase = getRate(target, base);
 
@@ -218,7 +305,7 @@ class CurrencyService {
     return '${unitFrom.round()} ${from.code} ≈ ${to.symbol}$formattedTo ${to.code}';
   }
 
-  /// Format kurs tukar untuk teks info (cth: "1 USD ≈ Rp 16.200")
+  /// Format kurs tukar untuk teks info (cth: "1 USD ≈ Rp 18.000")
   String getExchangeRateInfo(AppCurrency currency) {
     return getExchangeRateBetween(AppCurrency.idr, currency);
   }
