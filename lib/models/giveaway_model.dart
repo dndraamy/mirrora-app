@@ -21,7 +21,7 @@ class GiveawayParticipant {
   final String userId;
   final String userName;
   final String userEmail;
-  final String entryTicket; // Cth: #GLOW-1049
+  final String entryTicket; // Cth: #MIR-1049
   final DateTime registeredAt;
 
   Map<String, dynamic> toJson() => {
@@ -37,7 +37,7 @@ class GiveawayParticipant {
       userId: json['userId'] as String? ?? '',
       userName: json['userName'] as String? ?? 'Peserta',
       userEmail: json['userEmail'] as String? ?? '',
-      entryTicket: json['entryTicket'] as String? ?? '#GLOW-0000',
+      entryTicket: json['entryTicket'] as String? ?? '#MIR-0000',
       registeredAt: json['registeredAt'] != null
           ? DateTime.parse(json['registeredAt'] as String)
           : DateTime.now(),
@@ -393,8 +393,8 @@ class GiveawayCampaign {
     }
 
     return GiveawayCampaign(
-      id: json['id'] as String? ?? 'glowmate_2nd_anniversary',
-      title: json['title'] as String? ?? '🎉 GlowMate 2nd Anniversary Giveaway!',
+      id: json['id'] as String? ?? 'mirrora_2nd_anniversary',
+      title: json['title'] as String? ?? '🎉 Mirrora 2nd Anniversary Giveaway!',
       prize: json['prize'] as String? ?? '1 Set Skincare COSRX!',
       description: json['description'] as String? ??
           'Ikuti undian berhadiah spesial ulang tahun ke-2. Pemenang dipilih acak dan diverifikasi transparan di blockchain!',
@@ -415,8 +415,8 @@ class GiveawayCampaign {
   factory GiveawayCampaign.defaultCampaign() {
     final now = DateTime.now();
     return GiveawayCampaign(
-      id: 'glowmate_2nd_anniversary',
-      title: '🎉 GlowMate 2nd Anniversary Giveaway!',
+      id: 'mirrora_2nd_anniversary',
+      title: '🎉 Mirrora 2nd Anniversary Giveaway!',
       prize: '1 Set Skincare COSRX!',
       description:
           'Rayakan 2 tahun perjalanan self-care bersama kami! Dapatkan kesempatan memenangkan 1 Set Skincare COSRX original gratis.',
@@ -428,21 +428,21 @@ class GiveawayCampaign {
           userId: 'demo_user_01',
           userName: 'Nadia Putri',
           userEmail: 'nadia.putri@email.com',
-          entryTicket: '#GLOW-1001',
+          entryTicket: '#MIR-1001',
           registeredAt: now.subtract(const Duration(hours: 18)),
         ),
         GiveawayParticipant(
           userId: 'demo_user_02',
           userName: 'Dian Sastro',
           userEmail: 'dian.s@email.com',
-          entryTicket: '#GLOW-1002',
+          entryTicket: '#MIR-1002',
           registeredAt: now.subtract(const Duration(hours: 12)),
         ),
         GiveawayParticipant(
           userId: 'demo_user_03',
           userName: 'Alya Rahma',
           userEmail: 'alya.rahma@email.com',
-          entryTicket: '#GLOW-1003',
+          entryTicket: '#MIR-1003',
           registeredAt: now.subtract(const Duration(hours: 4)),
         ),
       ],
