@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -43,7 +44,7 @@ class NotificationService {
 
       // 2. Konfigurasi inisialisasi per platform
       const AndroidInitializationSettings androidSettings =
-          AndroidInitializationSettings('@mipmap/ic_launcher');
+          AndroidInitializationSettings('@drawable/ic_notification');
 
       const DarwinInitializationSettings iosSettings =
           DarwinInitializationSettings(
@@ -221,6 +222,9 @@ class NotificationService {
         priority: Priority.high,
         playSound: true,
         enableVibration: true,
+        icon: '@drawable/ic_notification',
+        color: Color(0xFFC56B84),
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
         styleInformation: BigTextStyleInformation(''),
       );
 
@@ -308,6 +312,9 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+        icon: '@drawable/ic_notification',
+        color: Color(0xFFC56B84),
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       styleInformation: BigTextStyleInformation(''),
     );
 
@@ -346,6 +353,9 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+        icon: '@drawable/ic_notification',
+        color: Color(0xFFC56B84),
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       styleInformation: BigTextStyleInformation(''),
     );
 
@@ -383,6 +393,9 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+        icon: '@drawable/ic_notification',
+        color: Color(0xFFC56B84),
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       styleInformation: BigTextStyleInformation(''),
     );
 
@@ -417,6 +430,9 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
+        icon: '@drawable/ic_notification',
+        color: Color(0xFFC56B84),
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
     );
 
     const NotificationDetails details = NotificationDetails(

@@ -721,11 +721,12 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
         DateTime.now().millisecondsSinceEpoch,
       );
       await box.put(_kCountInWindow(uid), 0);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _usedCount = 0;
           _onCooldown = false;
         });
+      }
     } else {
       final onCooldown = count >= _maxShakesPerWindow;
       if (onCooldown) {
@@ -741,11 +742,12 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           _startCountdown(remaining);
         }
       } else {
-        if (mounted)
+        if (mounted) {
           setState(() {
             _usedCount = count;
             _onCooldown = false;
           });
+        }
       }
     }
   }
