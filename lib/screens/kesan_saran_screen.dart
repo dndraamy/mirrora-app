@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -19,8 +20,7 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
 
   int _reactionIndex = 0;
   final List<String> _reactions = [
-    'Sluuurp~ Seger tapi dingin banget! 🧊',
-    'Brrr! Es batunya kebanyakan nih! 🥶',
+    'Seger tapi dingin banget! 🧊',
     'Sensasi dingin yang membekukan waktu! ⏰',
     'Racikan teh penuh perjuangan & begadang! 🍵',
     'Tetap manis walau sempat kena freeze! ✨',
@@ -112,7 +112,10 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
               GestureDetector(
                 onTap: _onTapEsTeh,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 22,
+                  ),
                   decoration: BoxDecoration(
                     color: MirroraTheme.white,
                     borderRadius: BorderRadius.circular(28),
@@ -137,12 +140,17 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
                         child: Container(
                           key: ValueKey(_reactionIndex),
                           margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 7,
+                          ),
                           decoration: BoxDecoration(
                             color: MirroraTheme.blushPink,
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: MirroraTheme.dustyRose.withValues(alpha: 0.3),
+                              color: MirroraTheme.dustyRose.withValues(
+                                alpha: 0.3,
+                              ),
                             ),
                           ),
                           child: Text(
@@ -199,7 +207,9 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
                             'Ketuk es teh untuk mengocok es batu 🧊',
                             style: TextStyle(
                               fontSize: 11.5,
-                              color: MirroraTheme.warmGray.withValues(alpha: 0.9),
+                              color: MirroraTheme.warmGray.withValues(
+                                alpha: 0.9,
+                              ),
                             ),
                           ),
                         ],
@@ -215,29 +225,29 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
               // KESAN CARD
               // ==========================================
               SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 0.2),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: _cardEntranceController,
-                    curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
-                  ),
-                ),
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(0, 0.2),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _cardEntranceController,
+                        curve: const Interval(
+                          0.1,
+                          0.7,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                    ),
                 child: FadeTransition(
                   opacity: CurvedAnimation(
                     parent: _cardEntranceController,
                     curve: const Interval(0.1, 0.7, curve: Curves.easeOut),
                   ),
                   child: _buildFeedbackCard(
-                    badgeIcon: Icons.ac_unit_rounded,
-                    badgeText: 'Sensasi Dingin & Es Teh',
-                    badgeColor: const Color(0xFFE8F3FA),
-                    badgeTextColor: const Color(0xFF2C6E91),
                     title: 'Kesan',
                     tagline: 'Refleksi Perjalanan Coding di Balik Layar',
-                    content:
-                        'Pengerjaan project mobile ini hadir bak seteguk es teh di tengah teriknya dinamika perkuliahan. Namun, kejutan rasa hadir di setiap sedotannya—es batunya menjelma begitu dominan hingga kehangatan racikan tehnya perlahan tersamarkan. Sensasi "dingin" yang ditawarkan tak sekadar menyejukkan, melainkan sanggup membekukan waktu; memaksa kami terjaga di sunyinya malam, merangkai widget demi widget, serta menuntun setiap error yang singgah hingga menemukan muaranya.',
+                    content: 'Pengerjaan project mobile ini hadir bak seteguk es teh di tengah teriknya dinamika perkuliahan. Namun, kejutan rasa hadir di setiap sedotannya—es batunya menjelma begitu dominan hingga kehangatan racikan tehnya perlahan tersamarkan. Sensasi "dingin" yang ditawarkan tak sekadar menyejukkan, melainkan sanggup membekukan waktu; memaksa kami terjaga di sunyinya malam, merangkai widget demi widget, serta menuntun setiap error yang singgah hingga menemukan muaranya.',
                     accentColor: const Color(0xFF63A0BF),
                   ),
                 ),
@@ -246,83 +256,34 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
               const SizedBox(height: 20),
 
               // ==========================================
-              // SARAN CARD
+              // SARAN CARD (tanpa badge)
               // ==========================================
               SlideTransition(
-                position: Tween<Offset>(
-                  begin: const Offset(0, 0.2),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: _cardEntranceController,
-                    curve: const Interval(0.35, 0.95, curve: Curves.easeOutCubic),
-                  ),
-                ),
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(0, 0.2),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: _cardEntranceController,
+                        curve: const Interval(
+                          0.35,
+                          0.95,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                    ),
                 child: FadeTransition(
                   opacity: CurvedAnimation(
                     parent: _cardEntranceController,
                     curve: const Interval(0.35, 0.95, curve: Curves.easeOut),
                   ),
                   child: _buildFeedbackCard(
-                    badgeIcon: Icons.local_cafe_rounded,
-                    badgeText: 'Takaran Porsi Es',
-                    badgeColor: MirroraTheme.blushPink,
-                    badgeTextColor: MirroraTheme.dustyRose,
                     title: 'Saran',
                     tagline: 'Harapan Hangat untuk Pembelajaran Mendatang',
-                    content:
-                        'Semoga di masa mendatang, racikan "es teh" dalam mata kuliah ini dapat ditakar kembali porsi esnya. Agar kehangatan dan kenikmatan dari proses pembelajaran itu sendiri dapat senantiasa diresapi, tanpa perlu menghentikan detak kreativitas mahasiswa akibat kejutan freeze mendadak di penghujung tenggat waktu.',
+                    content: 'Semoga di masa mendatang, racikan "es teh" dalam mata kuliah ini dapat ditakar kembali porsi esnya. Agar kehangatan dan kenikmatan dari proses pembelajaran itu sendiri dapat senantiasa diresapi, tanpa perlu menghentikan detak kreativitas mahasiswa akibat kejutan freeze mendadak di penghujung tenggat waktu.',
                     accentColor: MirroraTheme.dustyRose,
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // ==========================================
-              // CLOSING FOOTER
-              // ==========================================
-              Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: MirroraTheme.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: MirroraTheme.blushPink.withValues(alpha: 0.8)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      decoration: const BoxDecoration(
-                        color: MirroraTheme.blushPink,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '🧋',
-                          style: TextStyle(fontSize: 22),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Terima Kasih, Bapak Bagus Muhammad Akbar.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: MirroraTheme.charcoal,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ],
@@ -333,10 +294,6 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
   }
 
   Widget _buildFeedbackCard({
-    required IconData badgeIcon,
-    required String badgeText,
-    required Color badgeColor,
-    required Color badgeTextColor,
     required String title,
     required String tagline,
     required String content,
@@ -359,59 +316,42 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header Bar
+          // Header: judul + tagline di kiri, ikon kutip di kanan
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: badgeColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(badgeIcon, size: 14, color: badgeTextColor),
-                    const SizedBox(width: 6),
                     Text(
-                      badgeText,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: badgeTextColor,
+                      title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: MirroraTheme.charcoal,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      tagline,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: MirroraTheme.warmGray,
                       ),
                     ),
                   ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Icon(
                 Icons.format_quote_rounded,
                 size: 28,
                 color: accentColor.withValues(alpha: 0.35),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-
-          // Title
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: MirroraTheme.charcoal,
-              letterSpacing: -0.3,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            tagline,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: MirroraTheme.warmGray,
-            ),
           ),
           const SizedBox(height: 14),
 
@@ -438,10 +378,7 @@ class _KesanSaranScreenState extends State<KesanSaranScreen>
   }
 }
 
-// ============================================================================
 // CUSTOM ANIMATED ES TEH CUP WIDGET
-// ============================================================================
-
 class _AnimatedEsTehCup extends StatelessWidget {
   const _AnimatedEsTehCup({required this.floatProgress});
 
@@ -532,9 +469,16 @@ class _AnimatedEsTehCup extends StatelessWidget {
                     height: 20,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFFFF9E6), width: 1.5),
+                      border: Border.all(
+                        color: const Color(0xFFFFF9E6),
+                        width: 1.5,
+                      ),
                     ),
-                    child: const Icon(Icons.star, size: 10, color: Color(0xFFFFF9E6)),
+                    child: const Icon(
+                      Icons.star,
+                      size: 10,
+                      color: Color(0xFFFFF9E6),
+                    ),
                   ),
                 ),
               ),
@@ -634,7 +578,8 @@ class _AnimatedEsTehCup extends StatelessWidget {
                             width: 6,
                             height: 4,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF7675).withValues(alpha: 0.7),
+                              color: const Color(0xFFFF7675)
+                                  .withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(3),
                             ),
                           ),
@@ -678,7 +623,8 @@ class _AnimatedEsTehCup extends StatelessWidget {
                             width: 6,
                             height: 4,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF7675).withValues(alpha: 0.7),
+                              color: const Color(0xFFFF7675)
+                                  .withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(3),
                             ),
                           ),

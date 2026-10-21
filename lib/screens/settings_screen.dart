@@ -7,6 +7,7 @@ import '../services/admin_auth_service.dart';
 import '../theme/mirrora_theme.dart';
 import 'about_app_screen.dart';
 import 'change_password_screen.dart';
+import 'notification_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -318,13 +319,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _SettingTile(
                   icon: Icons.notifications_none_rounded,
                   title: 'Notifikasi',
-                  subtitle: 'Atur pengingat rutinitas',
-                  onTap: () => _open(
-                    const _PlaceholderTab(
-                      title: 'Notifikasi',
-                      icon: Icons.notifications_none_rounded,
-                    ),
-                  ),
+                  subtitle: 'Atur pengingat rutinitas & undian',
+                  onTap: () => _open(const NotificationSettingsScreen()),
                 ),
               ],
             ),
@@ -346,8 +342,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 if (!AdminAuthService().isStealthMode())
                   _SettingTile(
                     icon: Icons.admin_panel_settings_outlined,
-                    title: 'Portal Undian (Owner / Admin) 🛡️',
-                    subtitle: 'Terlindungi Enkripsi SHA-256',
+                    title: 'Portal Pengelola Undian',
+                    subtitle: 'Khusus Owner & Admin Mirrora',
                     onTap: _openAdminPortal,
                   ),
               ],
@@ -464,49 +460,6 @@ class _SettingTile extends StatelessWidget {
                   Icons.chevron_right_rounded,
                   color: MirroraTheme.warmGray,
                 ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.title, required this.icon});
-
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 96,
-              height: 96,
-              decoration: const BoxDecoration(
-                color: MirroraTheme.blushPink,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 44, color: MirroraTheme.dustyRose),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: MirroraTheme.charcoal,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Segera hadir',
-              style: TextStyle(fontSize: 13, color: MirroraTheme.warmGray),
-            ),
           ],
         ),
       ),

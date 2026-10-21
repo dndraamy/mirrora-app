@@ -1,7 +1,4 @@
 /// Model data untuk toko kecantikan (beauty store).
-///
-/// Mendukung toko retail modern (Sociolla, Sephora, dll.) dan toko kosmetik lokal/grosir
-/// (Mutiara Cosmetics, Jelita Cosmetics, CF Beauty, Puspa Indah, Toko Mahmod, dll.)
 library;
 
 class BeautyStore {
@@ -69,10 +66,6 @@ class BeautyStore {
     this.priceLevel = 'Standar',
   });
 
-  // ---------------------------------------------------------------------------
-  // Helper methods
-  // ---------------------------------------------------------------------------
-
   /// Memformat jarak dalam satuan yang mudah dibaca.
   ///
   /// Jika [distanceInKm] < 1 km, tampilkan dalam meter (misal '500 m').
@@ -85,15 +78,11 @@ class BeautyStore {
     return '${distanceInKm.toStringAsFixed(1)} km';
   }
 
-  // ---------------------------------------------------------------------------
   // Data sampel toko kosmetik & skincare di Indonesia
   // Termasuk toko lokal terkenal (Mutiara, Jelita, CF Beauty di Jogja, Mahmod di Bandung, dll.)
-  // ---------------------------------------------------------------------------
   static List<BeautyStore> sampleStores() {
     return const [
-      // ═══════════════════════════════════════════════════════════════════════
-      // ── YOGYAKARTA (Toko Kosmetik Lokal Favorit & Mall) ───────────────────
-      // ═══════════════════════════════════════════════════════════════════════
+      // YOGYAKARTA (Toko Kosmetik Lokal Favorit & Mall)
       BeautyStore(
         id: 'jogja_mutiara_01',
         name: 'Mutiara Kosmetik Pusat (Dr. Sutomo)',
@@ -335,9 +324,7 @@ class BeautyStore {
         priceLevel: 'Premium',
       ),
 
-      // ═══════════════════════════════════════════════════════════════════════
-      // ── BANDUNG (Toko Kosmetik Lokal & Mall) ──────────────────────────────
-      // ═══════════════════════════════════════════════════════════════════════
+      // BANDUNG (Toko Kosmetik Lokal & Mall)
       BeautyStore(
         id: 'bdg_mahmod_01',
         name: 'Toko Kosmetik Mahmod Bandung',
@@ -387,9 +374,7 @@ class BeautyStore {
         priceLevel: 'Standar / Mall',
       ),
 
-      // ═══════════════════════════════════════════════════════════════════════
-      // ── JAKARTA (Toko Grosir Lokal & Brand Mall) ──────────────────────────
-      // ═══════════════════════════════════════════════════════════════════════
+      // JAKARTA (Toko Grosir Lokal & Brand Mall)
       BeautyStore(
         id: 'jkt_pasarbaru_01',
         name: 'Toko Kosmetik Pasar Baru (Pusat Grosir)',
@@ -471,9 +456,7 @@ class BeautyStore {
         priceLevel: 'Standar',
       ),
 
-      // ═══════════════════════════════════════════════════════════════════════
-      // ── SURABAYA (Toko Lokal & Mall) ──────────────────────────────────────
-      // ═══════════════════════════════════════════════════════════════════════
+      // SURABAYA (Toko Lokal & Mall)
       BeautyStore(
         id: 'sby_cantik_01',
         name: 'Toko Cantik Kosmetik Surabaya',
@@ -507,9 +490,7 @@ class BeautyStore {
         priceLevel: 'Premium',
       ),
 
-      // ═══════════════════════════════════════════════════════════════════════
-      // ── SEMARANG & SOLO (Toko Lokal Legendaris) ───────────────────────────
-      // ═══════════════════════════════════════════════════════════════════════
+      // SEMARANG & SOLO (Toko Lokal Legendaris)
       BeautyStore(
         id: 'smg_sinar_01',
         name: 'Sinar Terang Kosmetik Semarang',

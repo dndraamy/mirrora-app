@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/routine_model.dart';
 import '../services/giveaway_service.dart';
+import '../services/notification_service.dart';
 import '../services/routine_service.dart';
 import '../theme/mirrora_theme.dart';
 import '../widgets/giveaway_home_banner.dart';
@@ -14,6 +15,7 @@ import 'bubble_pop_screen.dart';
 import 'daily_routine_screen.dart';
 import 'favorite_products_screen.dart';
 import 'nearby_stores_screen.dart';
+import 'notification_settings_screen.dart';
 import 'shake_to_pick_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -33,9 +35,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _routineService.addListener(_onRoutineUpdated);
+    GiveawayService().campaignNotifier.addListener(_onCampaignUpdated);
     // Tampilkan daily prompt, refresh voucher count, & cek pemenang giveaway setelah frame pertama selesai di-render
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final uid = Supabase.instance.client.auth.currentUser?.id ?? 'user_${widget.userName.toLowerCase()}';
+      final uid = _currentUid;
       GiveawayService().refreshVoucherCount(uid);
       _maybeShowDailyPrompt();
       _checkWinnerCelebration();
@@ -45,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _routineService.removeListener(_onRoutineUpdated);
+    GiveawayService().campaignNotifier.removeListener(_onCampaignUpdated);
     super.dispose();
   }
 
@@ -52,28 +56,53 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() {});
   }
 
+  void _onCampaignUpdated() {
+    if (mounted) {
+      setState(() {});
+      _checkWinnerCelebration();
+    }
+  }
+
   /// Cek apakah akun user yang login adalah pemenang giveaway blockchain
   Future<void> _checkWinnerCelebration() async {
     if (!mounted) return;
-    final user = Supabase.instance.client.auth.currentUser;
-    final uid = user?.id;
-    final email = user?.email;
-    final isWinner = GiveawayService().isUserWinner(uid, email);
+
+    // VALIDASI KETAT: Notifikasi & selebrasi hanya boleh muncul jika status undian adalah DRAWN!
+    // Jika masih CLOSED (ditutup) atau OPEN, notifikasi pemenang TIDAK AKAN PERNAH muncul.
+    final campaign = GiveawayService().currentCampaign;
+    if (!campaign.isDrawn) return;
+
+    final uid = _currentUid;
+    final email = _currentUserEmail;
+    final name = widget.userName;
+    final isWinner = GiveawayService().isUserWinner(uid, email, name);
     if (!isWinner) return;
 
     final winnerBlock = GiveawayService().currentCampaign.winnerBlock;
     if (winnerBlock == null) return;
 
     final box = Hive.box('settingsBox');
-    final shownKey =
+    final notifKey =
+        'giveaway_winner_notif_sent_${winnerBlock.campaignId}_${winnerBlock.index}';
+    final celebrationKey =
         'giveaway_celebration_shown_${winnerBlock.campaignId}_${winnerBlock.index}';
-    if (box.get(shownKey, defaultValue: false) == true) return;
+
+    // Picu notifikasi push khusus pemenang jika belum dikirimkan
+    if (box.get(notifKey, defaultValue: false) != true) {
+      await box.put(notifKey, true);
+      NotificationService().showWinnerPersonalNotification(
+        prize: GiveawayService().currentCampaign.prize,
+        ticketNumber: winnerBlock.entryTicket,
+      );
+    }
+
+    if (box.get(celebrationKey, defaultValue: false) == true) return;
 
     // Tunggu sedikit agar tidak bertabrakan dengan popup prompt harian
     await Future.delayed(const Duration(milliseconds: 1400));
     if (!mounted) return;
 
-    await box.put(shownKey, true);
+    await box.put(celebrationKey, true);
     if (!mounted) return;
 
     WinnerCelebrationDialog.show(context, winnerBlock);
@@ -106,11 +135,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _comingSoon(String feature) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text('$feature segera hadir')));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -219,8 +243,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
 
         IconButton(
-          onPressed: () => _comingSoon('Notifikasi'),
-          tooltip: 'Notifikasi',
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const NotificationSettingsScreen(),
+            ),
+          ),
+          tooltip: 'Pengaturan Notifikasi',
           icon: const Icon(
             Icons.notifications_none_rounded,
             color: MirroraTheme.charcoal,

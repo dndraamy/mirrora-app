@@ -8,21 +8,6 @@ import '../models/giveaway_model.dart';
 
 /// Service untuk mengelola siklus giveaway, integrasi database gratis (Supabase + Hive),
 /// dan blockchain lokal anti-manipulasi.
-///
-/// NOTE UNTUK SUPABASE (OPSIONAL):
-/// Jika ingin menyimpan peserta di Supabase secara cloud, buat tabel berikut di SQL Editor:
-/// ```sql
-/// CREATE TABLE IF NOT EXISTS giveaway_participants (
-///   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-///   user_id TEXT NOT NULL,
-///   user_name TEXT NOT NULL,
-///   user_email TEXT NOT NULL,
-///   entry_ticket TEXT NOT NULL,
-///   registered_at TIMESTAMPTZ DEFAULT NOW()
-/// );
-/// ```
-/// Jika tabel belum dibuat, sistem secara cerdas & otomatis menggunakan Hive lokal
-/// tanpa error, sehingga 100% aman untuk kuota gratisan!
 class GiveawayService {
   static final GiveawayService _instance = GiveawayService._internal();
   factory GiveawayService() => _instance;
@@ -110,7 +95,7 @@ class GiveawayService {
                 userId: uid,
                 userName: row['user_name'] as String? ?? 'Peserta',
                 userEmail: row['user_email'] as String? ?? '',
-                entryTicket: row['entry_ticket'] as String? ?? '#GLOW-0000',
+                entryTicket: row['entry_ticket'] as String? ?? '#MIR-0000',
                 registeredAt: row['registered_at'] != null
                     ? DateTime.parse(row['registered_at'] as String)
                     : DateTime.now(),
@@ -149,7 +134,7 @@ class GiveawayService {
   /// Tambah voucher tiket baru hasil menang Shake to Pick
   Future<String> addVoucherFromShake(String uid) async {
     final randNum = 1000 + Random().nextInt(9000);
-    final ticket = '#GLOW-$randNum';
+    final ticket = '#MIR-$randNum';
     final current = getAvailableVouchers(uid);
     current.add(ticket);
     await _box.put('user_available_vouchers_$uid', current);
@@ -252,7 +237,7 @@ class GiveawayService {
     }
 
     final ticketNumber = 1000 + campaign.participants.length + 1;
-    final ticket = '#GLOW-$ticketNumber';
+    final ticket = '#MIR-$ticketNumber';
 
     final participant = GiveawayParticipant(
       userId: userId,
@@ -355,25 +340,27 @@ class GiveawayService {
   }
 
   /// Mengecek apakah user saat ini adalah pemenang undian
-  bool isUserWinner(String? userId, String? userEmail) {
+  bool isUserWinner(String? userId, String? userEmail, [String? userName]) {
     final block = currentCampaign.winnerBlock;
     if (block == null) return false;
 
     final uid = userId?.trim();
     final email = userEmail?.trim().toLowerCase();
+    final name = userName?.trim().toLowerCase();
 
     final matchUid = uid != null && uid.isNotEmpty && block.winnerId == uid;
     final matchEmail = email != null && email.isNotEmpty && block.winnerEmail.toLowerCase() == email;
+    final matchName = name != null && name.isNotEmpty && block.winnerName.trim().toLowerCase() == name;
 
-    return matchUid || matchEmail;
+    return matchUid || matchEmail || matchName;
   }
 
   /// Reset undian untuk kebutuhan testing ulang oleh Owner/Admin
   Future<void> resetCampaignForTesting() async {
     final now = DateTime.now();
     final newCampaign = GiveawayCampaign(
-      id: 'glowmate_2nd_anniversary',
-      title: '🎉 GlowMate 2nd Anniversary Giveaway!',
+      id: 'mirrora_2nd_anniversary',
+      title: '🎉 Mirrora 2nd Anniversary Giveaway!',
       prize: '1 Set Skincare COSRX!',
       description:
           'Rayakan 2 tahun perjalanan self-care bersama kami! Dapatkan kesempatan memenangkan 1 Set Skincare COSRX original gratis.',
@@ -385,21 +372,21 @@ class GiveawayService {
           userId: 'demo_user_01',
           userName: 'Nadia Putri',
           userEmail: 'nadia.putri@email.com',
-          entryTicket: '#GLOW-1001',
+          entryTicket: '#MIR-1001',
           registeredAt: now.subtract(const Duration(hours: 18)),
         ),
         GiveawayParticipant(
           userId: 'demo_user_02',
           userName: 'Dian Sastro',
           userEmail: 'dian.s@email.com',
-          entryTicket: '#GLOW-1002',
+          entryTicket: '#MIR-1002',
           registeredAt: now.subtract(const Duration(hours: 12)),
         ),
         GiveawayParticipant(
           userId: 'demo_user_03',
           userName: 'Alya Rahma',
           userEmail: 'alya.rahma@email.com',
-          entryTicket: '#GLOW-1003',
+          entryTicket: '#MIR-1003',
           registeredAt: now.subtract(const Duration(hours: 4)),
         ),
       ],

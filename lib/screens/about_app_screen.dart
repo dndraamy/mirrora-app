@@ -6,7 +6,7 @@ import '../theme/mirrora_theme.dart';
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
 
-  static const String version = 'v1.0.0 (Build 2026)';
+  static const String version = '1.0.0 (Build 2026)';
 
   @override
   State<AboutScreen> createState() => _AboutScreenState();
@@ -18,7 +18,8 @@ class _AboutScreenState extends State<AboutScreen> {
 
   void _handleSecretTap() {
     final now = DateTime.now();
-    if (_lastTapTime == null || now.difference(_lastTapTime!) > const Duration(seconds: 3)) {
+    if (_lastTapTime == null ||
+        now.difference(_lastTapTime!) > const Duration(seconds: 3)) {
       _secretTaps = 1;
     } else {
       _secretTaps++;
@@ -146,7 +147,9 @@ class _AboutScreenState extends State<AboutScreen> {
                   children: [
                     InkWell(
                       onTap: _handleSecretTap,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(22),
+                      ),
                       child: const _InfoRow(
                         icon: Icons.info_outline_rounded,
                         label: 'Version',

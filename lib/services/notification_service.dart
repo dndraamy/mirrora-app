@@ -6,9 +6,10 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../models/routine_model.dart';
 
-/// Service untuk mengelola notifikasi lokal terjadwal di perangkat.
-/// Memastikan notifikasi rutinitas skincare tetap berbunyi dan muncul di status bar
-/// bahkan saat aplikasi sedang ditutup / tidak sedang dibuka.
+/// Service untuk mengelola notifikasi lokal terjadwal & push instan di perangkat.
+/// Mendukung:
+/// 1. Pengingat harian rutinitas skincare (Pagi & Malam).
+/// 2. Notifikasi Giveaway: Pembukaan Undian, Pengumuman Pemenang, & Khusus Pemenang (Klaim Hadiah).
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -20,10 +21,16 @@ class NotificationService {
 
   bool _isInitialized = false;
 
-  static const String _channelId = 'mirrora_daily_routine_channel';
-  static const String _channelName = 'Pengingat Rutinitas Skincare';
-  static const String _channelDescription =
+  // Channels
+  static const String _routineChannelId = 'mirrora_daily_routine_channel';
+  static const String _routineChannelName = 'Pengingat Rutinitas Skincare';
+  static const String _routineChannelDesc =
       'Notifikasi pengingat harian agar rutinitas skincare tidak terlewat';
+
+  static const String _giveawayChannelId = 'mirrora_giveaway_channel';
+  static const String _giveawayChannelName = 'Informasi & Pemenang Giveaway';
+  static const String _giveawayChannelDesc =
+      'Notifikasi pembukaan giveaway, hasil pengundian, dan hadiah pemenang';
 
   /// Inisialisasi plugin notifikasi dan zona waktu perangkat
   Future<void> init() async {
@@ -57,22 +64,33 @@ class NotificationService {
         },
       );
 
-      // 3. Buat notification channel di Android dengan prioritas tinggi
+      // 3. Buat notification channels di Android dengan prioritas tinggi
       if (!kIsWeb && Platform.isAndroid) {
         final androidPlugin = _notificationsPlugin
             .resolvePlatformSpecificImplementation<
                 AndroidFlutterLocalNotificationsPlugin>();
 
         if (androidPlugin != null) {
-          const AndroidNotificationChannel channel = AndroidNotificationChannel(
-            _channelId,
-            _channelName,
-            description: _channelDescription,
+          const AndroidNotificationChannel routineChannel = AndroidNotificationChannel(
+            _routineChannelId,
+            _routineChannelName,
+            description: _routineChannelDesc,
             importance: Importance.max,
             playSound: true,
             enableVibration: true,
           );
-          await androidPlugin.createNotificationChannel(channel);
+
+          const AndroidNotificationChannel giveawayChannel = AndroidNotificationChannel(
+            _giveawayChannelId,
+            _giveawayChannelName,
+            description: _giveawayChannelDesc,
+            importance: Importance.max,
+            playSound: true,
+            enableVibration: true,
+          );
+
+          await androidPlugin.createNotificationChannel(routineChannel);
+          await androidPlugin.createNotificationChannel(giveawayChannel);
         }
       }
 
@@ -131,12 +149,14 @@ class NotificationService {
     return false;
   }
 
-  /// Menghasilkan integer notification ID unik dari String ID rutinitas
+  // =========================================================================
+  // ROUTINE NOTIFICATIONS (PENGINGAT RUTINITAS SKINCARE)
+  // =========================================================================
+
   int _generateNotificationId(String routineId) {
     return routineId.hashCode.abs() % 2147483647;
   }
 
-  /// Parse string jam (format '07:00' atau '07.00') menjadi TimeOfDay / Hour & Minute
   ({int hour, int minute})? _parseTime(String? timeStr) {
     if (timeStr == null || timeStr.trim().isEmpty) return null;
     final cleaned = timeStr.trim().replaceAll('.', ':');
@@ -151,7 +171,6 @@ class NotificationService {
     return null;
   }
 
-  /// Menghitung jadwal waktu berikutnya pada jam & menit tertentu dalam zona waktu lokal
   tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
     final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
     tz.TZDateTime scheduledDate = tz.TZDateTime(
@@ -163,7 +182,6 @@ class NotificationService {
       minute,
     );
 
-    // Jika jam tersebut sudah lewat untuk hari ini, jadwalkan untuk besok
     if (scheduledDate.isBefore(now)) {
       scheduledDate = scheduledDate.add(const Duration(days: 1));
     }
@@ -178,7 +196,6 @@ class NotificationService {
     final time = _parseTime(routine.time);
     final notificationId = _generateNotificationId(routine.id);
 
-    // Jika tidak ada jam yang diatur, batalkan notifikasi yang mungkin pernah dibuat sebelumnya
     if (time == null) {
       await cancelRoutineNotification(routine.id);
       return;
@@ -197,9 +214,9 @@ class NotificationService {
 
       const AndroidNotificationDetails androidDetails =
           AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
+        _routineChannelId,
+        _routineChannelName,
+        channelDescription: _routineChannelDesc,
         importance: Importance.max,
         priority: Priority.high,
         playSound: true,
@@ -225,8 +242,8 @@ class NotificationService {
         scheduledDate: scheduledDate,
         notificationDetails: notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        matchDateTimeComponents: DateTimeComponents.time, // Berulang setiap hari pada jam & menit yang sama
-        payload: routine.id,
+        matchDateTimeComponents: DateTimeComponents.time,
+        payload: 'routine_${routine.id}',
       );
 
       debugPrint(
@@ -237,7 +254,6 @@ class NotificationService {
     }
   }
 
-  /// Membatalkan notifikasi untuk rutinitas tertentu
   Future<void> cancelRoutineNotification(String routineId) async {
     if (kIsWeb) return;
     try {
@@ -249,7 +265,6 @@ class NotificationService {
     }
   }
 
-  /// Sinkronisasi seluruh jadwal notifikasi dari daftar rutinitas pengguna aktif
   Future<void> syncAllRoutineNotifications(List<DailyRoutine> routines) async {
     if (kIsWeb) return;
     if (!_isInitialized) await init();
@@ -263,27 +278,141 @@ class NotificationService {
     }
   }
 
-  /// Membatalkan seluruh notifikasi (dipanggil saat user logout)
   Future<void> cancelAll() async {
     if (kIsWeb) return;
     try {
       await _notificationsPlugin.cancelAll();
-      debugPrint('All routine notifications cancelled.');
+      debugPrint('All notifications cancelled.');
     } catch (e) {
       debugPrint('Error cancelling all notifications: $e');
     }
   }
 
-  /// Notifikasi tes langsung untuk memastikan izin dan suara notifikasi aktif di HP
+  // =========================================================================
+  // GIVEAWAY NOTIFICATIONS (NOTIFIKASI UNDIAN & PEMENANG)
+  // =========================================================================
+
+  /// Notifikasi saat Admin Mengaktifkan Undian (Status = Open)
+  Future<void> showGiveawayOpenedNotification({
+    required String title,
+    required String prize,
+  }) async {
+    if (kIsWeb) return;
+    if (!_isInitialized) await init();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _giveawayChannelId,
+      _giveawayChannelName,
+      channelDescription: _giveawayChannelDesc,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      styleInformation: BigTextStyleInformation(''),
+    );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+
+    await _notificationsPlugin.show(
+      id: 70001,
+      title: '🎉 $title Telah Dibuka!',
+      body: 'Hadiah Spesial: $prize! Kumpulkan tiket undian via Shake to Pick sekarang juga!',
+      notificationDetails: details,
+      payload: 'giveaway_open',
+    );
+  }
+
+  /// Notifikasi Publik saat Undian Sudah Selesai Diundi
+  Future<void> showGiveawayDrawnNotification({
+    required String title,
+    required String winnerName,
+    required String ticketNumber,
+  }) async {
+    if (kIsWeb) return;
+    if (!_isInitialized) await init();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _giveawayChannelId,
+      _giveawayChannelName,
+      channelDescription: _giveawayChannelDesc,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      styleInformation: BigTextStyleInformation(''),
+    );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+
+    await _notificationsPlugin.show(
+      id: 70002,
+      title: '🏆 Pemenang Giveaway Telah Diundi!',
+      body: 'Selamat kepada $winnerName ($ticketNumber) atas kemenangannya! Hasil sah terkunci di blockchain lokal.',
+      notificationDetails: details,
+      payload: 'giveaway_drawn',
+    );
+  }
+
+  /// Notifikasi Khusus Untuk User yang Memenangkan Undian
+  Future<void> showWinnerPersonalNotification({
+    required String prize,
+    required String ticketNumber,
+  }) async {
+    if (kIsWeb) return;
+    if (!_isInitialized) await init();
+
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _giveawayChannelId,
+      _giveawayChannelName,
+      channelDescription: _giveawayChannelDesc,
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      styleInformation: BigTextStyleInformation(''),
+    );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+
+    await _notificationsPlugin.show(
+      id: 70003,
+      title: '👑 SELAMAT! KAMU MEMENANGKAN GIVEAWAY!',
+      body: 'Tiketmu $ticketNumber terpilih sebagai pemenang $prize! Buka Mirrora dan isi data dirimu untuk verifikasi pengiriman hadiah.',
+      notificationDetails: details,
+      payload: 'giveaway_winner_claim',
+    );
+  }
+
+  /// Notifikasi tes langsung
   Future<void> showTestNotification() async {
     if (kIsWeb) return;
     if (!_isInitialized) await init();
 
-    const AndroidNotificationDetails androidDetails =
-        AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDescription,
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _routineChannelId,
+      _routineChannelName,
+      channelDescription: _routineChannelDesc,
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
@@ -302,9 +431,8 @@ class NotificationService {
     await _notificationsPlugin.show(
       id: 99999,
       title: 'Pengingat Skincare Mirrora Aktif! ✨',
-      body: 'Notifikasi harian akan otomatis muncul sesuai jam rutinitas yang kamu atur.',
+      body: 'Notifikasi harian dan informasi giveaway akan otomatis muncul di perangkat kamu.',
       notificationDetails: details,
     );
   }
 }
-

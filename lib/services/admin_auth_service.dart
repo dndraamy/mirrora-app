@@ -139,7 +139,7 @@ class AdminAuthService {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Masukkan Master Passphrase Owner untuk membuka pengelolaan undian blockchain.',
+                    'Masukkan Master Passphrase Owner untuk membuka pengelolaan undian.',
                     style: TextStyle(
                       fontSize: 12.5,
                       color: MirroraTheme.warmGray,
@@ -157,7 +157,7 @@ class AdminAuthService {
                       color: MirroraTheme.charcoal,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Master Passphrase (default: Owner#Mirrora2026)',
+                      hintText: 'Master Passphrase',
                       hintStyle: const TextStyle(fontSize: 11, color: MirroraTheme.warmGray),
                       filled: true,
                       fillColor: MirroraTheme.cream,

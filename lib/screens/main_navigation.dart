@@ -1,3 +1,4 @@
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/mirrora_theme.dart';
@@ -28,6 +29,18 @@ class _MainNavigationState extends State<MainNavigation> {
   late String _userName = widget.userName;
 
   @override
+  void initState() {
+    super.initState();
+    _saveActiveUsername(_userName);
+  }
+
+  void _saveActiveUsername(String name) {
+    if (Hive.isBoxOpen('settingsBox')) {
+      Hive.box('settingsBox').put('active_profile_username', name);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final screens = <Widget>[
       HomeScreen(userName: _userName),
@@ -35,7 +48,10 @@ class _MainNavigationState extends State<MainNavigation> {
       AiAssistantScreen(userName: _userName),
       ProfileScreen(
         userName: _userName,
-        onProfileChanged: (name) => setState(() => _userName = name),
+        onProfileChanged: (name) {
+          setState(() => _userName = name);
+          _saveActiveUsername(name);
+        },
       ),
       const SettingsScreen(),
     ];

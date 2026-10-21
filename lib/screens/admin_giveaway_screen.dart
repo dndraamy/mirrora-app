@@ -1,3 +1,6 @@
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/notification_service.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 
@@ -80,6 +83,47 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
     }
   }
 
+  Future<void> _sendDrawnNotifications(BlockchainBlock block) async {
+    // VALIDASI KETAT: Notifikasi hanya terkirim jika status kampanye adalah DRAWN!
+    // Jika masih CLOSED (ditutup) atau OPEN, notifikasi tidak akan masuk.
+    if (_service.currentCampaign.status != GiveawayStatus.drawn) return;
+
+    // 1. Notifikasi publik untuk semua user bahwa pemenang sudah ditentukan
+    await NotificationService().showGiveawayDrawnNotification(
+      title: _service.currentCampaign.title,
+      winnerName: block.winnerName,
+      ticketNumber: block.entryTicket,
+    );
+
+    // 2. Cek apakah pemenang adalah akun yang sedang aktif di perangkat ini
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    String activeName = currentUser?.userMetadata?['username'] as String? ?? '';
+    if (activeName.isEmpty && Hive.isBoxOpen('settingsBox')) {
+      activeName = Hive.box('settingsBox').get('active_profile_username', defaultValue: 'Sarah') as String;
+    }
+    if (activeName.isEmpty) activeName = 'Sarah';
+
+    final activeUid = currentUser?.id ?? 'user_${activeName.toLowerCase()}';
+    final activeEmail = currentUser?.email ?? '${activeName.toLowerCase()}@mirrora.user';
+
+    final isCurrentWinner = _service.isUserWinner(activeUid, activeEmail, activeName);
+
+    if (isCurrentWinner) {
+      if (Hive.isBoxOpen('settingsBox')) {
+        await Hive.box('settingsBox').put(
+          'giveaway_winner_notif_sent_${block.campaignId}_${block.index}',
+          true,
+        );
+      }
+      // Jeda 700ms agar kedua notifikasi muncul di Android secara berurutan dan jelas
+      await Future.delayed(const Duration(milliseconds: 700));
+      await NotificationService().showWinnerPersonalNotification(
+        prize: _service.currentCampaign.prize,
+        ticketNumber: block.entryTicket,
+      );
+    }
+  }
+
   Future<void> _changeStatus(GiveawayStatus newStatus) async {
     await _service.updateCampaignSettings(status: newStatus);
     setState(() {});
@@ -89,6 +133,21 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
     } else if (newStatus == GiveawayStatus.drawn) {
       label = 'Diundi (Drawn) - Pemenang tampil di Home';
     }
+
+    // Jika admin mengubah status menjadi OPEN, kirim notifikasi undian dibuka
+    if (newStatus == GiveawayStatus.open) {
+      await NotificationService().showGiveawayOpenedNotification(
+        title: _service.currentCampaign.title,
+        prize: _service.currentCampaign.prize,
+      );
+    }
+
+    // HANYA jika status diubah menjadi DRAWN dan pemenang sudah ditarik, notifikasi pemenang boleh dikirim.
+    // Jika status CLOSED (ditutup), tidak ada notifikasi pemenang yang dikirimkan.
+    if (newStatus == GiveawayStatus.drawn && _service.currentCampaign.winnerBlock != null) {
+      await _sendDrawnNotifications(_service.currentCampaign.winnerBlock!);
+    }
+
     _showMessage('Status undian diubah menjadi: $label');
   }
 
@@ -126,8 +185,8 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
           style: TextStyle(fontWeight: FontWeight.w700, color: MirroraTheme.charcoal),
         ),
         content: Text(
-          'Sistem akan memilih 1 pemenang acak secara kriptografis dari ${c.participants.length} peserta, '
-          'lalu menguncinya ke dalam Blockchain lokal (SHA-256).',
+          'Sistem akan memilih 1 pemenang acak dari ${c.participants.length} peserta, '
+          'lalu menguncinya.',
           style: const TextStyle(fontSize: 13, height: 1.45, color: MirroraTheme.warmGray),
         ),
         actions: [
@@ -190,7 +249,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Algoritma acak sedang memilih 1 peserta secara adil & mengunci hasil ke blockchain...',
+                  'Sedang memilih 1 peserta secara adil...',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, height: 1.45, color: MirroraTheme.warmGray),
                 ),
@@ -211,26 +270,19 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
       setState(() => _isDrawing = false);
 
+      // Kirim notifikasi pemenang (hanya jika berstatus drawn)
+      await _sendDrawnNotifications(block);
+
       // Tampilkan popup bukti blockchain pemenang
-      BlockchainProofDialog.show(context, block);
+      if (mounted) {
+        BlockchainProofDialog.show(context, block);
+      }
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
       setState(() => _isDrawing = false);
       _showMessage('Gagal menarik pemenang: $e');
     }
-  }
-
-  void _addDemoParticipant() {
-    final demoNames = ['Bella Safira', 'Clarissa Tan', 'Jessica Mila', 'Rania Zulaikha', 'Fitriani Dewi'];
-    final existing = _service.currentCampaign.participants.length;
-    final name = demoNames[existing % demoNames.length];
-    final uid = 'demo_user_${DateTime.now().millisecondsSinceEpoch % 1000}';
-    final email = '${name.toLowerCase().replaceAll(' ', '.')}@email.com';
-
-    _service.registerParticipant(userId: uid, userName: name, userEmail: email);
-    setState(() {});
-    _showMessage('Peserta demo "$name" berhasil ditambahkan!');
   }
 
   Future<void> _resetCampaign() async {
@@ -412,9 +464,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ==========================================
                   // STATUS KAMPANYE
-                  // ==========================================
                   _buildCard(
                     title: 'Status Undian Saat Ini',
                     icon: Icons.toggle_on_rounded,
@@ -460,9 +510,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ==========================================
                   // DETAIL PENGATURAN & TANGGAL
-                  // ==========================================
                   _buildCard(
                     title: 'Jadwal & Pengaturan Kampanye',
                     icon: Icons.tune_rounded,
@@ -560,17 +608,15 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ==========================================
                   // PENARIKAN PEMENANG & DATA KLAIM
-                  // ==========================================
                   _buildCard(
-                    title: 'Penarikan Pemenang (Blockchain)',
+                    title: 'Penarikan Pemenang',
                     icon: Icons.auto_awesome_rounded,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Sistem memilih 1 peserta secara acak menggunakan CSPRNG dan merantainya ke dalam Blockchain lokal (SHA-256).',
+                          'Sistem memilih 1 peserta secara acak.',
                           style: TextStyle(fontSize: 12, height: 1.45, color: MirroraTheme.warmGray),
                         ),
                         const SizedBox(height: 14),
@@ -727,18 +773,10 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ==========================================
                   // DAFTAR PESERTA
-                  // ==========================================
                   _buildCard(
                     title: 'Daftar Peserta (${campaign.participants.length})',
                     icon: Icons.people_rounded,
-                    action: TextButton.icon(
-                      onPressed: _addDemoParticipant,
-                      icon: const Icon(Icons.person_add_alt_1_rounded, size: 15),
-                      label: const Text('+ Demo', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
-                      style: TextButton.styleFrom(foregroundColor: MirroraTheme.dustyRose),
-                    ),
                     child: Column(
                       children: [
                         if (campaign.participants.isEmpty)
@@ -811,9 +849,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ==========================================
-                  // PUSAT KEAMANAN OWNER / ADMIN (BERSIH & ELEGAN)
-                  // ==========================================
+                  // PUSAT KEAMANAN OWNER / ADMIN
                   _buildCard(
                     title: 'Pusat Keamanan Owner',
                     icon: Icons.shield_outlined,
@@ -850,7 +886,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
                           ),
                           subtitle: const Text(
-                            'Perbarui kunci rahasia owner dengan hash SHA-256 tersalt.',
+                            'Perbarui kunci rahasia owner.',
                             style: TextStyle(fontSize: 11, color: MirroraTheme.warmGray),
                           ),
                           trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 13, color: MirroraTheme.warmGray),
@@ -862,9 +898,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
                   const SizedBox(height: 16),
 
-                  // ==========================================
                   // BLOCKCHAIN LEDGER STATS
-                  // ==========================================
                   _buildCard(
                     title: 'Blockchain Ledger ($blocksCount Blok)',
                     icon: Icons.link_rounded,

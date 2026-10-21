@@ -10,25 +10,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/giveaway_service.dart';
 import '../theme/mirrora_theme.dart';
 
-// ─── Hive keys (per-user, prefix dengan user ID) ────────────────────────────
-// Menggunakan fungsi agar tiap akun memiliki slot rate-limit sendiri
-// di perangkat yang sama.
+// ─── Kunci Hive (per pengguna, diberi awalan user ID) ───────────────────────
+// Dibuat dalam bentuk fungsi supaya setiap akun punya slot batas shake
+// sendiri-sendiri, walaupun dipakai di perangkat yang sama.
 String _kWindowStartMs(String uid) => 'shake_window_start_ms_$uid';
-String _kCountInWindow(String uid)  => 'shake_count_in_window_$uid';
+String _kCountInWindow(String uid) => 'shake_count_in_window_$uid';
 
-// ─── Rate limit ─────────────────────────────────────────────────────────────
+// ─── Batas penggunaan (rate limit) ──────────────────────────────────────────
 const int _maxShakesPerWindow = 3;
 const Duration _windowDuration = Duration(hours: 24);
 
-// ─── Shake parameters ───────────────────────────────────────────────────────
-const double _shakeThreshold = 16.0; // m/s² minimum untuk register shake
-const double _energyPerShake = 0.145; // energi per shake event (butuh ~7 shake kuat)
-const double _energyDecayRate = 0.09; // energi hilang per detik jika tidak shake
+// ─── Parameter guncangan ────────────────────────────────────────────────────
+const double _shakeThreshold =
+    12.0; // percepatan minimum (m/s²) agar dianggap guncangan
+const double _energyPerShake =
+    0.25; // energi yang bertambah per guncangan (butuh sekitar 5 guncangan)
+const double _energyDecayRate =
+    0.09; // energi yang berkurang per detik jika tidak digoyang
 
-// ─── Peluang Dapat Tiket Undian (Gacha Berimbang: ~48% Dapat Tiket, ~52% Zonk) ───
+// ─── Peluang dapat tiket undian (gacha berimbang: ~48% dapat tiket, ~52% zonk) ───
 const double _ticketWinRate = 0.48;
 
-// ─── Warna petal ────────────────────────────────────────────────────────────
+// ─── Warna kelopak bunga ────────────────────────────────────────────────────
 const _petalColors = [
   Color(0xFFFFD6E0),
   Color(0xFFF8B8CC),
@@ -41,7 +44,7 @@ const _petalColors = [
 final _rng = Random();
 
 // =========================================================================
-// DATA: PETAL PARTICLE
+// DATA: PARTIKEL KELOPAK BUNGA
 // =========================================================================
 
 class _Petal {
@@ -64,6 +67,8 @@ class _Petal {
   double lifetime;
   double age = 0.0;
 
+  // Transparansi kelopak: muncul perlahan di awal, penuh di tengah,
+  // lalu memudar di akhir masa hidupnya.
   double get opacity {
     final t = age / lifetime;
     if (t < 0.1) return t / 0.1;
@@ -75,7 +80,7 @@ class _Petal {
 }
 
 // =========================================================================
-// PAINTER: POHON SAKURA + PETALS
+// PAINTER: POHON SAKURA + KELOPAK
 // =========================================================================
 
 class _BlossomTreePainter extends CustomPainter {
@@ -89,10 +94,10 @@ class _BlossomTreePainter extends CustomPainter {
   final double shakeEnergy;
   final List<_Petal> petals;
 
-  // Natural height of tree in local coords (trunk base → blossom top)
+  // Tinggi asli pohon dalam koordinat lokal (dari pangkal batang sampai puncak bunga)
   static const double _naturalTreeH = 185.0;
 
-  // ── Branch config ─────────────────────────────────────────────────────────
+  // ── Konfigurasi warna ranting ─────────────────────────────────────────────
   static const _trunkColor = Color(0xFF8B6043);
   static const _branchColor = Color(0xFF9A7050);
   static const _thinBranchColor = Color(0xFFB08865);
@@ -107,10 +112,10 @@ class _BlossomTreePainter extends CustomPainter {
     final cx = size.width / 2;
     final base = size.height;
 
-    // Scale tree to fill ~80% of canvas height — much more visible
+    // Skala pohon agar memenuhi ±80% tinggi kanvas supaya terlihat jelas
     final treeScale = ((size.height * 0.80) / _naturalTreeH).clamp(0.8, 2.8);
 
-    // ── Draw tree (scaled + rotated around trunk base) ─────────────────────
+    // ── Gambar pohon (diskalakan + diputar dengan poros di pangkal batang) ──
     canvas.save();
     canvas.translate(cx, base);
     canvas.scale(treeScale);
@@ -122,16 +127,16 @@ class _BlossomTreePainter extends CustomPainter {
 
     canvas.restore();
 
-    // ── Draw falling petals (absolute canvas coords, not scaled) ───────────
+    // ── Gambar kelopak yang berjatuhan (koordinat kanvas asli, tidak diskalakan) ──
     for (final p in petals) {
       _drawPetal(canvas, p);
     }
   }
 
-  // ── Trunk ─────────────────────────────────────────────────────────────────
+  // ── Batang pohon ──────────────────────────────────────────────────────────
   void _drawTrunk(Canvas canvas) {
     final path = Path();
-    // Tapered trunk shape (wide at base, narrower at top)
+    // Bentuk batang meruncing (lebar di pangkal, menyempit ke atas)
     path.moveTo(-9, 0);
     path.cubicTo(-10, -40, -7, -80, -5, -118);
     path.lineTo(5, -118);
@@ -145,7 +150,7 @@ class _BlossomTreePainter extends CustomPainter {
         ..style = PaintingStyle.fill,
     );
 
-    // Bark texture lines
+    // Garis tekstur kulit kayu
     final barkPaint = Paint()
       ..color = _trunkColor.withValues(alpha: 0.5)
       ..strokeWidth = 1.2
@@ -154,28 +159,88 @@ class _BlossomTreePainter extends CustomPainter {
     canvas.drawLine(const Offset(3, -30), const Offset(4, -85), barkPaint);
   }
 
-  // ── Branches ──────────────────────────────────────────────────────────────
+  // ── Dahan dan ranting ─────────────────────────────────────────────────────
   void _drawBranches(Canvas canvas) {
     _branch(canvas, Offset.zero, const Offset(-80, -148), _branchColor, 7.5);
     _branch(canvas, Offset.zero, const Offset(80, -148), _branchColor, 7.5);
-    _branch(canvas, const Offset(0, -118), const Offset(0, -158), _branchColor, 6);
-    _branch(canvas, const Offset(-30, -100), const Offset(-62, -155), _thinBranchColor, 4.5);
-    _branch(canvas, const Offset(30, -100), const Offset(62, -155), _thinBranchColor, 4.5);
-    _branch(canvas, const Offset(-50, -120), const Offset(-92, -152), _thinBranchColor, 3);
-    _branch(canvas, const Offset(50, -120), const Offset(92, -152), _thinBranchColor, 3);
-    _branch(canvas, const Offset(-20, -108), const Offset(-40, -160), _thinBranchColor, 3);
-    _branch(canvas, const Offset(20, -108), const Offset(40, -160), _thinBranchColor, 3);
-    _branch(canvas, const Offset(0, -118), const Offset(-22, -165), _thinBranchColor, 2.5);
-    _branch(canvas, const Offset(0, -118), const Offset(22, -165), _thinBranchColor, 2.5);
+    _branch(
+      canvas,
+      const Offset(0, -118),
+      const Offset(0, -158),
+      _branchColor,
+      6,
+    );
+    _branch(
+      canvas,
+      const Offset(-30, -100),
+      const Offset(-62, -155),
+      _thinBranchColor,
+      4.5,
+    );
+    _branch(
+      canvas,
+      const Offset(30, -100),
+      const Offset(62, -155),
+      _thinBranchColor,
+      4.5,
+    );
+    _branch(
+      canvas,
+      const Offset(-50, -120),
+      const Offset(-92, -152),
+      _thinBranchColor,
+      3,
+    );
+    _branch(
+      canvas,
+      const Offset(50, -120),
+      const Offset(92, -152),
+      _thinBranchColor,
+      3,
+    );
+    _branch(
+      canvas,
+      const Offset(-20, -108),
+      const Offset(-40, -160),
+      _thinBranchColor,
+      3,
+    );
+    _branch(
+      canvas,
+      const Offset(20, -108),
+      const Offset(40, -160),
+      _thinBranchColor,
+      3,
+    );
+    _branch(
+      canvas,
+      const Offset(0, -118),
+      const Offset(-22, -165),
+      _thinBranchColor,
+      2.5,
+    );
+    _branch(
+      canvas,
+      const Offset(0, -118),
+      const Offset(22, -165),
+      _thinBranchColor,
+      2.5,
+    );
   }
 
-  void _branch(Canvas canvas, Offset from, Offset to, Color color, double width) {
+  void _branch(
+    Canvas canvas,
+    Offset from,
+    Offset to,
+    Color color,
+    double width,
+  ) {
     final paint = Paint()
       ..color = color
       ..strokeWidth = width
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
-    // Curved branch using quadratic bezier
+    // Ranting dibuat melengkung memakai kurva bezier kuadratik
     final ctrl = Offset(
       (from.dx + to.dx) / 2 + (to.dy - from.dy) * 0.05,
       (from.dy + to.dy) / 2,
@@ -186,9 +251,9 @@ class _BlossomTreePainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
-  // ── Blossom clouds ────────────────────────────────────────────────────────
+  // ── Gumpalan bunga (kanopi) ───────────────────────────────────────────────
   void _drawBlossoms(Canvas canvas) {
-    // Clusters centered at branch tips + intermediate positions
+    // Gumpalan bunga diletakkan di ujung ranting dan beberapa titik di antaranya
     final clusters = <_ClusterSpec>[
       _ClusterSpec(const Offset(-82, -152), 36),
       _ClusterSpec(const Offset(82, -152), 36),
@@ -209,7 +274,7 @@ class _BlossomTreePainter extends CustomPainter {
   }
 
   void _drawBlossomCluster(Canvas canvas, Offset center, double r) {
-    // Layered circles — pale outer → deeper inner
+    // Lingkaran bertumpuk: dari lapisan luar yang pucat ke lapisan dalam yang lebih pekat
     final layers = [
       (r * 1.0, _blossomPale.withValues(alpha: 0.6)),
       (r * 0.85, _blossomLight.withValues(alpha: 0.75)),
@@ -217,7 +282,7 @@ class _BlossomTreePainter extends CustomPainter {
       (r * 0.48, _blossomDeep.withValues(alpha: 0.70)),
     ];
 
-    // Offset sub-circles to give a cloud silhouette
+    // Lingkaran-lingkaran kecil yang digeser agar siluetnya mirip awan
     final offsets = [
       Offset.zero,
       Offset(r * 0.38, -r * 0.18),
@@ -231,14 +296,14 @@ class _BlossomTreePainter extends CustomPainter {
     for (final (radius, color) in layers) {
       final paint = Paint()..color = color;
       for (final off in offsets) {
-        // Scale offset by layer factor
+        // Geseran disesuaikan dengan faktor ukuran tiap lapisan
         final scaledOff = off * (radius / r);
         canvas.drawCircle(center + scaledOff, radius * 0.62, paint);
       }
       canvas.drawCircle(center, radius * 0.72, paint);
     }
 
-    // Tiny flower dot details on top
+    // Titik-titik kecil sebagai detail bunga di bagian atas
     final dotPaint = Paint()..color = _blossomDeep.withValues(alpha: 0.5);
     for (int i = 0; i < 6; i++) {
       final angle = i * pi / 3;
@@ -248,7 +313,7 @@ class _BlossomTreePainter extends CustomPainter {
     }
   }
 
-  // ── Falling petal ─────────────────────────────────────────────────────────
+  // ── Kelopak yang berjatuhan ───────────────────────────────────────────────
   void _drawPetal(Canvas canvas, _Petal p) {
     canvas.save();
     canvas.translate(p.x, p.y);
@@ -258,7 +323,7 @@ class _BlossomTreePainter extends CustomPainter {
       ..color = p.color.withValues(alpha: p.opacity)
       ..style = PaintingStyle.fill;
 
-    // Oval petal shape
+    // Bentuk kelopak oval
     final path = Path();
     final w = p.size * 0.45;
     final h = p.size * 0.9;
@@ -268,7 +333,7 @@ class _BlossomTreePainter extends CustomPainter {
 
     canvas.drawPath(path, paint);
 
-    // Center vein
+    // Garis tengah kelopak
     final veinPaint = Paint()
       ..color = p.color.withValues(alpha: p.opacity * 0.4)
       ..strokeWidth = 0.7
@@ -289,7 +354,7 @@ class _ClusterSpec {
 }
 
 // =========================================================================
-// SHAKE TO PICK SCREEN
+// LAYAR SHAKE TO PICK
 // =========================================================================
 
 class ShakeToPickScreen extends StatefulWidget {
@@ -303,40 +368,42 @@ enum _PickState { idle, result }
 
 class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     with TickerProviderStateMixin {
-  // ── Supabase user ID (rate limit di-isolasi per akun) ─────────────────────
+  // ── User ID Supabase (batas shake dipisah per akun) ───────────────────────
   String get _uid =>
       Supabase.instance.client.auth.currentUser?.id ?? 'anonymous';
 
-  // ── Game ticker (60fps loop) ───────────────────────────────────────────────
+  // ── Ticker game (loop 60fps) ──────────────────────────────────────────────
   late final Ticker _ticker;
   Duration _lastElapsed = Duration.zero;
 
-  // ── Tree spring physics ───────────────────────────────────────────────────
+  // ── Fisika pegas untuk goyangan pohon ─────────────────────────────────────
   double _treeAngle = 0.0;
   double _treeAngVelocity = 0.0;
-  double _idleTime = 0.0; // for idle sway sine
+  double _idleTime = 0.0; // waktu untuk gerakan sinus ayunan pelan saat diam
 
-  // ── Shake energy ──────────────────────────────────────────────────────────
-  /// 0.0 → 1.0 — harus penuh untuk trigger hasil
+  // ── Energi guncangan ──────────────────────────────────────────────────────
+  /// 0.0 → 1.0 — harus penuh untuk memunculkan hasil
   double _shakeEnergy = 0.0;
-  bool _isBursting = false; // sementara animasi burst saat energy penuh
+  bool _isBursting =
+      false; // true sementara animasi ledakan kelopak saat energi penuh
 
-  // ── Petals ────────────────────────────────────────────────────────────────
+  // ── Kelopak ───────────────────────────────────────────────────────────────
   final List<_Petal> _petals = [];
   double _petalSpawnAccum = 0.0;
 
-  // ── Shake debounce ────────────────────────────────────────────────────────
+  // ── Jeda antar guncangan (debounce) ───────────────────────────────────────
   DateTime _lastShakeEvent = DateTime.fromMillisecondsSinceEpoch(0);
-  double _latestX = 0.0; // last X accel reading (for impulse direction)
+  double _latestX =
+      0.0; // bacaan percepatan sumbu X terakhir (untuk arah dorongan)
 
-  // ── Screen state ──────────────────────────────────────────────────────────
+  // ── State layar ───────────────────────────────────────────────────────────
   _PickState _state = _PickState.idle;
   String? _wonTicket;
   bool _isWin = false;
   bool _isSubmittingTicket = false;
   bool _isTicketSubmitted = false;
 
-  // ── Rate limit ────────────────────────────────────────────────────────────
+  // ── Batas penggunaan harian ───────────────────────────────────────────────
   int _usedCount = 0;
   bool _onCooldown = false;
   Duration _cooldownRemaining = Duration.zero;
@@ -345,13 +412,13 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
   // ── Sensor ────────────────────────────────────────────────────────────────
   StreamSubscription<AccelerometerEvent>? _accelSub;
 
-  // ── Tree canvas size (updated from LayoutBuilder, used by _spawnPetal) ────
+  // ── Ukuran kanvas pohon (diperbarui dari LayoutBuilder, dipakai _spawnPetal) ──
   Size _treeCanvasSize = const Size(400, 380);
 
-  // ── Pulse animation for hint pill ─────────────────────────────────────────
+  // ── Animasi denyut untuk pil petunjuk ─────────────────────────────────────
   late final AnimationController _pulseCtrl;
 
-  // ── Result animation ──────────────────────────────────────────────────────
+  // ── Animasi tampilan hasil ────────────────────────────────────────────────
   late final AnimationController _resultCtrl = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 520),
@@ -366,7 +433,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
   );
 
   // ═══════════════════════════════════════════════════════════════
-  // LIFECYCLE
+  // SIKLUS HIDUP (LIFECYCLE)
   // ═══════════════════════════════════════════════════════════════
 
   @override
@@ -392,7 +459,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GAME LOOP (60fps)
+  // LOOP GAME (60fps)
   // ═══════════════════════════════════════════════════════════════
 
   void _onTick(Duration elapsed) {
@@ -403,10 +470,10 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
 
     _idleTime += dt;
 
-    // ── Spring physics ──────────────────────────────────────────
-    const spring = 5.5;   // softer → more swing
-    const damping = 2.8;  // less damped → more oscillation
-    // Idle gentle sway (more visible at low energy)
+    // ── Fisika pegas ────────────────────────────────────────────
+    const spring = 5.5; // makin lembut → ayunan makin lebar
+    const damping = 2.8; // redaman lebih kecil → osilasi lebih lama
+    // Ayunan pelan saat diam (hanya terlihat ketika energi rendah)
     final idleTarget = (_shakeEnergy < 0.08)
         ? 0.04 * sin(_idleTime * 0.45)
         : 0.0;
@@ -415,12 +482,12 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     _treeAngVelocity += (springForce + dampForce) * dt;
     _treeAngle += _treeAngVelocity * dt;
 
-    // ── Energy decay ─────────────────────────────────────────────
+    // ── Energi berkurang perlahan ────────────────────────────────
     if (_state == _PickState.idle && !_onCooldown && !_isBursting) {
       _shakeEnergy = max(0, _shakeEnergy - _energyDecayRate * dt);
     }
 
-    // ── Petal spawning ───────────────────────────────────────────
+    // ── Memunculkan kelopak ──────────────────────────────────────
     if (_shakeEnergy > 0.08 && _petals.length < 60) {
       _petalSpawnAccum += _shakeEnergy * 6.0 * dt;
       while (_petalSpawnAccum >= 1.0 && _petals.length < 60) {
@@ -429,18 +496,18 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
       }
     }
 
-    // ── Update petals ─────────────────────────────────────────────
+    // ── Memperbarui posisi kelopak ───────────────────────────────
     _updatePetals(dt);
 
     setState(() {});
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // PHYSICS & PARTICLES
+  // FISIKA & PARTIKEL
   // ═══════════════════════════════════════════════════════════════
 
   void _applyShakeImpulse(double xAccel) {
-    // Large impulse — makes tree visibly swing with the shake
+    // Dorongan besar agar pohon terlihat jelas ikut bergoyang saat device digoyang
     _treeAngVelocity += xAccel * 0.032;
     _treeAngVelocity = _treeAngVelocity.clamp(-5.0, 5.0);
   }
@@ -449,22 +516,25 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     final w = _treeCanvasSize.width;
     final h = _treeCanvasSize.height;
 
-    // Mirror the scale calculation from _BlossomTreePainter.paint
+    // Perhitungan skala ini sama dengan yang ada di _BlossomTreePainter.paint
     const naturalTreeH = 185.0;
     final treeScale = ((h * 0.80) / naturalTreeH).clamp(0.8, 2.8);
 
-    // Blossom zone in screen coords:
-    // In local tree coords blossoms sit at y ≈ -120 to -175 from trunk base.
-    // Trunk base = canvas bottom (h). So in screen coords:
+    // Area bunga dalam koordinat layar:
+    // Di koordinat lokal pohon, bunga berada di y ≈ -120 sampai -175 dari pangkal batang.
+    // Pangkal batang = bagian bawah kanvas (h). Jadi di koordinat layar:
     //   blossomTop  = h - treeScale * 175
     //   blossomBot  = h - treeScale * 115
     final blossomTop = h - treeScale * 175;
     final blossomBot = h - treeScale * 115;
-    final blossomY   = blossomTop + _rng.nextDouble() * (blossomBot - blossomTop);
-    final blossomX   = w / 2 + (_rng.nextDouble() - 0.5) * (treeScale * 145);
+    final blossomY = blossomTop + _rng.nextDouble() * (blossomBot - blossomTop);
+    final blossomX = w / 2 + (_rng.nextDouble() - 0.5) * (treeScale * 145);
 
-    final speed = isBurst ? (80 + _rng.nextDouble() * 140) : (20 + _rng.nextDouble() * 60);
-    final angle = -pi / 2 + (_rng.nextDouble() - 0.5) * (isBurst ? pi : pi * 0.5);
+    final speed = isBurst
+        ? (80 + _rng.nextDouble() * 140)
+        : (20 + _rng.nextDouble() * 60);
+    final angle =
+        -pi / 2 + (_rng.nextDouble() - 0.5) * (isBurst ? pi : pi * 0.5);
 
     _petals.add(
       _Petal(
@@ -475,7 +545,9 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
         rotation: _rng.nextDouble() * 2 * pi,
         rotationSpeed: (_rng.nextDouble() - 0.5) * 5,
         color: _petalColors[_rng.nextInt(_petalColors.length)],
-        size: isBurst ? (8 + _rng.nextDouble() * 8) : (6 + _rng.nextDouble() * 7),
+        size: isBurst
+            ? (8 + _rng.nextDouble() * 8)
+            : (6 + _rng.nextDouble() * 7),
         lifetime: isBurst
             ? (2.0 + _rng.nextDouble() * 1.5)
             : (1.5 + _rng.nextDouble() * 1.2),
@@ -490,72 +562,70 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
       p.x += p.vx * dt;
       p.vy += gravity * dt;
       p.y += p.vy * dt;
-      p.vx *= pow(0.985, dt * 60).toDouble(); // air resistance
+      p.vx *= pow(0.985, dt * 60).toDouble(); // hambatan udara
       p.rotation += p.rotationSpeed * dt;
-      // Wind drift proportional to tree angle
+      // Kelopak terbawa angin sesuai kecepatan goyangan pohon
       p.vx += _treeAngVelocity * 8 * dt;
     }
     _petals.removeWhere((p) => p.isDead);
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // ACCELEROMETER
+  // AKSELEROMETER
   // ═══════════════════════════════════════════════════════════════
 
   void _startAccelerometer() {
-    _accelSub = accelerometerEventStream().listen(
-      (event) {
-        if (_state != _PickState.idle) return;
-        if (_onCooldown || _isBursting) return;
+    _accelSub = accelerometerEventStream().listen((event) {
+      if (_state != _PickState.idle) return;
+      if (_onCooldown || _isBursting) return;
 
-        _latestX = event.x;
+      _latestX = event.x;
 
-        final magnitude = sqrt(
-          event.x * event.x + event.y * event.y + event.z * event.z,
-        );
+      final magnitude = sqrt(
+        event.x * event.x + event.y * event.y + event.z * event.z,
+      );
 
-        // Apply tree impulse even at moderate shakes (threshold 7.0 → responsive)
-        if (magnitude > 7.0) {
-          _applyShakeImpulse(event.x);
+      // Pohon ikut bergoyang bahkan pada guncangan sedang (ambang 7.0 → responsif)
+      if (magnitude > 7.0) {
+        _applyShakeImpulse(event.x);
+      }
+
+      // Energi hanya bertambah untuk guncangan kuat, dengan jeda (debounce)
+      if (magnitude > _shakeThreshold) {
+        final now = DateTime.now();
+        if (now.difference(_lastShakeEvent) <
+            const Duration(milliseconds: 550)) {
+          return;
         }
+        _lastShakeEvent = now;
+        _shakeEnergy = (_shakeEnergy + _energyPerShake).clamp(0.0, 1.0);
 
-        // Energy accumulation — only for strong shakes, with debounce
-        if (magnitude > _shakeThreshold) {
-          final now = DateTime.now();
-          if (now.difference(_lastShakeEvent) < const Duration(milliseconds: 550)) {
-            return;
-          }
-          _lastShakeEvent = now;
-          _shakeEnergy = (_shakeEnergy + _energyPerShake).clamp(0.0, 1.0);
-
-          if (_shakeEnergy >= 1.0) {
-            _triggerResult();
-          }
+        if (_shakeEnergy >= 1.0) {
+          _triggerResult();
         }
-      },
-      onError: (_) {},
-    );
+      }
+    }, onError: (_) {});
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // TRIGGER RESULT
+  // MEMUNCULKAN HASIL
   // ═══════════════════════════════════════════════════════════════
 
   Future<void> _triggerResult() async {
     if (_isBursting) return;
     _isBursting = true;
 
-    // Big burst of petals
+    // Ledakan kelopak dalam jumlah banyak
     for (int i = 0; i < 30; i++) {
       _spawnPetal(isBurst: true);
     }
-    // Strong tree shake impulse
+    // Dorongan kuat pada pohon
     _treeAngVelocity += (_rng.nextDouble() - 0.5) * 4;
 
     await Future.delayed(const Duration(milliseconds: 650));
     if (!mounted) return;
 
-    // Peluang gacha: ~48% win ticket undian, ~52% zonk
+    // Peluang gacha: ~48% dapat tiket undian, ~52% zonk
     final isWin = _rng.nextDouble() < _ticketWinRate;
     String? wonTicket;
     if (isWin) {
@@ -595,7 +665,8 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     try {
       final user = Supabase.instance.client.auth.currentUser;
       final email = user?.email ?? 'user@mirrora.app';
-      final name = user?.userMetadata?['name'] as String? ??
+      final name =
+          user?.userMetadata?['name'] as String? ??
           user?.userMetadata?['full_name'] as String? ??
           (email.contains('@') ? email.split('@')[0] : 'Peserta');
 
@@ -633,7 +704,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // RATE LIMIT
+  // BATAS PENGGUNAAN HARIAN (RATE LIMIT)
   // ═══════════════════════════════════════════════════════════════
 
   Future<void> _loadRateLimit() async {
@@ -645,20 +716,36 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     final elapsed = DateTime.now().difference(windowStart);
 
     if (elapsed >= _windowDuration) {
-      await box.put(_kWindowStartMs(uid), DateTime.now().millisecondsSinceEpoch);
+      await box.put(
+        _kWindowStartMs(uid),
+        DateTime.now().millisecondsSinceEpoch,
+      );
       await box.put(_kCountInWindow(uid), 0);
-      if (mounted) setState(() { _usedCount = 0; _onCooldown = false; });
+      if (mounted)
+        setState(() {
+          _usedCount = 0;
+          _onCooldown = false;
+        });
     } else {
       final onCooldown = count >= _maxShakesPerWindow;
       if (onCooldown) {
-        final remaining =
-            windowStart.add(_windowDuration).difference(DateTime.now());
+        final remaining = windowStart
+            .add(_windowDuration)
+            .difference(DateTime.now());
         if (mounted) {
-          setState(() { _usedCount = count; _onCooldown = true; _cooldownRemaining = remaining; });
+          setState(() {
+            _usedCount = count;
+            _onCooldown = true;
+            _cooldownRemaining = remaining;
+          });
           _startCountdown(remaining);
         }
       } else {
-        if (mounted) setState(() { _usedCount = count; _onCooldown = false; });
+        if (mounted)
+          setState(() {
+            _usedCount = count;
+            _onCooldown = false;
+          });
       }
     }
   }
@@ -683,7 +770,10 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
       final remaining = DateTime.fromMillisecondsSinceEpoch(windowStartMs)
           .add(_windowDuration)
           .difference(DateTime.now());
-      setState(() { _onCooldown = true; _cooldownRemaining = remaining; });
+      setState(() {
+        _onCooldown = true;
+        _cooldownRemaining = remaining;
+      });
       _startCountdown(remaining);
     }
   }
@@ -692,7 +782,10 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     _countdownTimer?.cancel();
     setState(() => _cooldownRemaining = initial);
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
       final next = _cooldownRemaining - const Duration(seconds: 1);
       if (next <= Duration.zero) {
         t.cancel();
@@ -711,7 +804,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // BUILD
+  // TAMPILAN (BUILD)
   // ═══════════════════════════════════════════════════════════════
 
   @override
@@ -737,22 +830,25 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     );
   }
 
-  // ─── IDLE VIEW ────────────────────────────────────────────────────────────
+  // ─── TAMPILAN AWAL (IDLE) ─────────────────────────────────────────────────
   Widget _buildIdleView() {
     final energyPct = (_shakeEnergy * 100).toInt();
     final isShaking = _shakeEnergy > 0.05;
 
     return Column(
       children: [
-        // ── Tree canvas: fills most of screen ────────────────────────────────
+        // ── Kanvas pohon: memenuhi sebagian besar layar ──────────────────────
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // Track real canvas size so _spawnPetal uses correct coordinates
-              _treeCanvasSize = Size(constraints.maxWidth, constraints.maxHeight);
+              // Simpan ukuran kanvas yang sebenarnya agar _spawnPetal memakai koordinat yang tepat
+              _treeCanvasSize = Size(
+                constraints.maxWidth,
+                constraints.maxHeight,
+              );
               return Stack(
                 children: [
-                  // Gradient background — soft pink→blush→cream
+                  // Latar gradasi lembut: pink → blush → krem
                   Positioned.fill(
                     child: Container(
                       decoration: const BoxDecoration(
@@ -760,9 +856,9 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Color(0xFFFBEEF3), // pale pink top
-                            Color(0xFFF8E4EC), // blush mid
-                            Color(0xFFFFF9F5), // cream bottom
+                            Color(0xFFFBEEF3), // pink pucat di atas
+                            Color(0xFFF8E4EC), // blush di tengah
+                            Color(0xFFFFF9F5), // krem di bawah
                           ],
                           stops: [0.0, 0.52, 1.0],
                         ),
@@ -770,24 +866,36 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                     ),
                   ),
 
-                  // Soft decorative blur circles
+                  // Lingkaran dekoratif buram sebagai hiasan latar
                   const Positioned(
-                    top: -45, right: -45,
+                    top: -45,
+                    right: -45,
                     child: _AmbientCircle(
-                        size: 150, color: Color(0xFFEFB8CC), opacity: 0.20),
+                      size: 150,
+                      color: Color(0xFFEFB8CC),
+                      opacity: 0.20,
+                    ),
                   ),
                   const Positioned(
-                    top: 55, left: -35,
+                    top: 55,
+                    left: -35,
                     child: _AmbientCircle(
-                        size: 95, color: Color(0xFFC98C9C), opacity: 0.08),
+                      size: 95,
+                      color: Color(0xFFC98C9C),
+                      opacity: 0.08,
+                    ),
                   ),
                   const Positioned(
-                    bottom: 80, right: -20,
+                    bottom: 80,
+                    right: -20,
                     child: _AmbientCircle(
-                        size: 70, color: Color(0xFFE5AABF), opacity: 0.10),
+                      size: 70,
+                      color: Color(0xFFE5AABF),
+                      opacity: 0.10,
+                    ),
                   ),
 
-                  // Tree + petals (LayoutBuilder already gives us correct size)
+                  // Pohon + kelopak (LayoutBuilder sudah memberi ukuran yang benar)
                   Positioned.fill(
                     child: RepaintBoundary(
                       child: GestureDetector(
@@ -804,15 +912,19 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                     ),
                   ),
 
-                  // ── Top row: title pill + session dots ───────────────────
+                  // ── Baris atas: pil judul + indikator jatah shake ────────
                   Positioned(
-                    top: 12, left: 16, right: 16,
+                    top: 12,
+                    left: 16,
+                    right: 16,
                     child: _buildTopRow(),
                   ),
 
-                  // ── Bottom: pulsing shake hint pill ──────────────────────
+                  // ── Bagian bawah: pil petunjuk shake yang berdenyut ──────
                   Positioned(
-                    bottom: 18, left: 28, right: 28,
+                    bottom: 18,
+                    left: 28,
+                    right: 28,
                     child: _buildShakeHint(isShaking),
                   ),
                 ],
@@ -821,7 +933,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           ),
         ),
 
-        // ── Bottom panel: energy bar + usage ─────────────────────────────────
+        // ── Panel bawah: bar energi + sisa jatah shake ───────────────────────
         Container(
           decoration: BoxDecoration(
             color: MirroraTheme.white,
@@ -848,11 +960,11 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     );
   }
 
-  // Top row overlaid on tree canvas: title + session counter dots
+  // Baris atas di atas kanvas pohon: judul + indikator jatah shake
   Widget _buildTopRow() {
     return Row(
       children: [
-        // Title pill
+        // Pil judul
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
@@ -882,7 +994,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           ),
         ),
         const Spacer(),
-        // Session counter as pill-shaped dots
+        // Indikator jumlah shake yang sudah dipakai, berbentuk titik-titik pil
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
@@ -920,7 +1032,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     );
   }
 
-  // Animated hint pill overlaid at the bottom of the tree canvas
+  // Pil petunjuk beranimasi di bagian bawah kanvas pohon
   Widget _buildShakeHint(bool isShaking) {
     if (_onCooldown) {
       return Center(
@@ -929,8 +1041,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           decoration: BoxDecoration(
             color: MirroraTheme.white.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(30),
-            border:
-                Border.all(color: MirroraTheme.blushPink, width: 1.5),
+            border: Border.all(color: MirroraTheme.blushPink, width: 1.5),
             boxShadow: [
               BoxShadow(
                 color: MirroraTheme.blushPink.withValues(alpha: 0.55),
@@ -958,7 +1069,9 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                   Text(
                     'Buka lagi dalam ${_formatCountdown(_cooldownRemaining)}',
                     style: const TextStyle(
-                        fontSize: 10, color: MirroraTheme.warmGray),
+                      fontSize: 10,
+                      color: MirroraTheme.warmGray,
+                    ),
                   ),
                 ],
               ),
@@ -974,15 +1087,13 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
         final t = _pulseCtrl.value;
         final pulse = sin(t * 2 * pi);
         final scl = 1.0 + pulse * (isShaking ? 0.032 : 0.018);
-        final glowAlpha =
-            0.10 + (pulse + 1) / 2 * (isShaking ? 0.30 : 0.14);
+        final glowAlpha = 0.10 + (pulse + 1) / 2 * (isShaking ? 0.30 : 0.14);
         return Center(
           child: Transform.scale(
             scale: scl,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 220),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
               decoration: BoxDecoration(
                 gradient: isShaking
                     ? const LinearGradient(
@@ -1003,8 +1114,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color:
-                        MirroraTheme.dustyRose.withValues(alpha: glowAlpha),
+                    color: MirroraTheme.dustyRose.withValues(alpha: glowAlpha),
                     blurRadius: isShaking ? 24 : 14,
                     spreadRadius: isShaking ? 2 : 0,
                   ),
@@ -1036,9 +1146,11 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                       ),
                       if (!isShaking)
                         const Text(
-                          'Butuh ~7 goyangan kuat',
+                          'Butuh ~5 goyangan kuat',
                           style: TextStyle(
-                              fontSize: 10, color: MirroraTheme.warmGray),
+                            fontSize: 10,
+                            color: MirroraTheme.warmGray,
+                          ),
                         ),
                     ],
                   ),
@@ -1050,7 +1162,6 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
       },
     );
   }
-
 
   Widget _buildEnergyMeter(int pct) {
     return Column(
@@ -1076,16 +1187,14 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                     ? MirroraTheme.dustyRose
                     : MirroraTheme.warmGray,
               ),
-              child: Text(
-                pct >= 100 ? '🎉 PENUH!' : '$pct%',
-              ),
+              child: Text(pct >= 100 ? '🎉 PENUH!' : '$pct%'),
             ),
           ],
         ),
         const SizedBox(height: 8),
         Stack(
           children: [
-            // Background track
+            // Latar bar (jalur kosong)
             Container(
               height: 14,
               decoration: BoxDecoration(
@@ -1093,7 +1202,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            // Fill
+            // Isi bar sesuai energi
             AnimatedFractionallySizedBox(
               duration: const Duration(milliseconds: 120),
               widthFactor: _shakeEnergy.clamp(0.0, 1.0),
@@ -1102,21 +1211,16 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: _shakeEnergy > 0.7
-                        ? [
-                            const Color(0xFFC98C9C),
-                            const Color(0xFFE8A0B8),
-                          ]
-                        : [
-                            const Color(0xFFD4A0B0),
-                            const Color(0xFFC98C9C),
-                          ],
+                        ? [const Color(0xFFC98C9C), const Color(0xFFE8A0B8)]
+                        : [const Color(0xFFD4A0B0), const Color(0xFFC98C9C)],
                   ),
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: _shakeEnergy > 0.3
                       ? [
                           BoxShadow(
-                            color: MirroraTheme.dustyRose
-                                .withValues(alpha: _shakeEnergy * 0.5),
+                            color: MirroraTheme.dustyRose.withValues(
+                              alpha: _shakeEnergy * 0.5,
+                            ),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -1125,9 +1229,9 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                 ),
               ),
             ),
-            // Petal markers
+            // Garis penanda pembagi bar (tiap kelipatan satu guncangan)
             Row(
-              children: List.generate(7, (_) {
+              children: List.generate(5, (_) {
                 return Expanded(
                   child: Align(
                     alignment: Alignment.centerRight,
@@ -1152,11 +1256,8 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
               ? 'Hampir! Goyangkan lebih kencang! 💪'
               : _shakeEnergy > 0.2
               ? 'Goyangkan terus sampai penuh!'
-              : 'Butuh ~7 goyangan kuat untuk mengguncang tiket',
-          style: const TextStyle(
-            fontSize: 11,
-            color: MirroraTheme.warmGray,
-          ),
+              : 'Butuh ~5 goyangan kuat untuk mengguncang tiket',
+          style: const TextStyle(fontSize: 11, color: MirroraTheme.warmGray),
         ),
       ],
     );
@@ -1166,7 +1267,11 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     final remaining = _maxShakesPerWindow - _usedCount;
     return Row(
       children: [
-        const Icon(Icons.refresh_rounded, size: 14, color: MirroraTheme.warmGray),
+        const Icon(
+          Icons.refresh_rounded,
+          size: 14,
+          color: MirroraTheme.warmGray,
+        ),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
@@ -1220,18 +1325,19 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     );
   }
 
-  // Tap fallback (adds tiny energy, ~0.05 per tap → ~20 taps needed)
+  // Alternatif jika device tidak bisa digoyang: tiap ketukan menambah sedikit energi
+  // (~0.05 per ketukan → butuh sekitar 20 ketukan)
   void _onTap() {
     _shakeEnergy = (_shakeEnergy + 0.05).clamp(0.0, 1.0);
     _treeAngVelocity += (_rng.nextDouble() - 0.5) * 0.5;
     if (_shakeEnergy >= 1.0) _triggerResult();
   }
 
-  // ─── RESULT VIEW ──────────────────────────────────────────────────────────
+  // ─── TAMPILAN HASIL ───────────────────────────────────────────────────────
   Widget _buildResultView() {
     return Stack(
       children: [
-        // Petals still falling in background
+        // Kelopak masih berjatuhan di latar belakang
         RepaintBoundary(
           child: CustomPaint(
             painter: _BlossomTreePainter(
@@ -1243,7 +1349,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           ),
         ),
 
-        // Result card
+        // Kartu hasil
         FadeTransition(
           opacity: _fadeAnim,
           child: SlideTransition(
@@ -1260,7 +1366,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
 
                   const SizedBox(height: 16),
 
-                  // Action Buttons
+                  // Tombol aksi
                   if (!_onCooldown)
                     ElevatedButton.icon(
                       onPressed: _resetToIdle,
@@ -1289,7 +1395,11 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.timer_outlined, size: 16, color: MirroraTheme.dustyRose),
+                          const Icon(
+                            Icons.timer_outlined,
+                            size: 16,
+                            color: MirroraTheme.dustyRose,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'Bisa shake lagi dalam ${_formatCountdown(_cooldownRemaining)}',
@@ -1328,7 +1438,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     );
   }
 
-  // ─── TICKET WIN CARD ──────────────────────────────────────────────────────
+  // ─── KARTU DAPAT TIKET ────────────────────────────────────────────────────
   Widget _buildWinTicketCard() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1377,7 +1487,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           ),
           child: Column(
             children: [
-              // Header Ilustrasi Tiket
+              // Bagian atas kartu: ilustrasi tiket
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -1410,12 +1520,18 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                   children: [
                     const Text(
                       'Nomor Tiket Kamu:',
-                      style: TextStyle(fontSize: 12, color: MirroraTheme.warmGray),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: MirroraTheme.warmGray,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: MirroraTheme.cream,
                         borderRadius: BorderRadius.circular(16),
@@ -1440,11 +1556,15 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                     const Text(
                       'Tiket ini sudah otomatis tersimpan di dompet tiketmu. Masukkan ke undian sekarang untuk melipatgandakan peluang menang!',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, height: 1.5, color: MirroraTheme.charcoal),
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.5,
+                        color: MirroraTheme.charcoal,
+                      ),
                     ),
                     const SizedBox(height: 16),
 
-                    // Tombol Submit Langsung ke Undian
+                    // Tombol untuk langsung memasukkan tiket ke undian
                     if (_isTicketSubmitted)
                       Container(
                         width: double.infinity,
@@ -1457,7 +1577,11 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                         child: const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 18),
+                            Icon(
+                              Icons.check_circle_rounded,
+                              color: Color(0xFF2E7D32),
+                              size: 18,
+                            ),
                             SizedBox(width: 8),
                             Text(
                               'Tiket Sudah Masuk ke Undian! ✓',
@@ -1475,19 +1599,27 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                         width: double.infinity,
                         height: 46,
                         child: ElevatedButton.icon(
-                          onPressed: _isSubmittingTicket ? null : _submitWonTicketDirectly,
+                          onPressed: _isSubmittingTicket
+                              ? null
+                              : _submitWonTicketDirectly,
                           icon: _isSubmittingTicket
                               ? const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Icon(Icons.how_to_reg_rounded, size: 18),
                           label: Text(
                             _isSubmittingTicket
                                 ? 'Memasukkan Tiket...'
                                 : 'Masukkan Tiket ke Undian Sekarang',
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFC5A880),
@@ -1509,7 +1641,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     );
   }
 
-  // ─── ZONK CARD ────────────────────────────────────────────────────────────
+  // ─── KARTU ZONK ───────────────────────────────────────────────────────────
   Widget _buildZonkCard() {
     final remaining = _maxShakesPerWindow - _usedCount;
     return Column(
@@ -1521,7 +1653,9 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
             decoration: BoxDecoration(
               color: MirroraTheme.blushPink,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: MirroraTheme.dustyRose.withValues(alpha: 0.3)),
+              border: Border.all(
+                color: MirroraTheme.dustyRose.withValues(alpha: 0.3),
+              ),
             ),
             child: const Text(
               '🌸 Belum Beruntung Kali Ini',
@@ -1550,7 +1684,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
           ),
           child: Column(
             children: [
-              // Header Zonk
+              // Bagian atas kartu zonk
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 24),
@@ -1562,7 +1696,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                 ),
                 child: const Column(
                   children: [
-                    Text('🍃🌸', style: TextStyle(fontSize: 54)),
+                    Text('🍃❌', style: TextStyle(fontSize: 54)),
                     SizedBox(height: 8),
                     Text(
                       'ZONK! Bunga Sakura Berguguran',
@@ -1598,14 +1732,21 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.info_outline_rounded, size: 18, color: MirroraTheme.dustyRose),
+                          const Icon(
+                            Icons.info_outline_rounded,
+                            size: 18,
+                            color: MirroraTheme.dustyRose,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               remaining > 0
                                   ? 'Masih ada $remaining kali kesempatan lagi hari ini! Coba goyang lebih bertenaga!'
                                   : 'Kesempatan harianmu sudah habis. Kembali lagi besok untuk berburu tiket!',
-                              style: const TextStyle(fontSize: 11.5, color: MirroraTheme.warmGray),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: MirroraTheme.warmGray,
+                              ),
                             ),
                           ),
                         ],
@@ -1623,7 +1764,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
 }
 
 // =========================================================================
-// DAILY PROMPT DIALOG
+// DIALOG AJAKAN HARIAN
 // =========================================================================
 
 class ShakeToPickPromptDialog extends StatelessWidget {
@@ -1649,13 +1790,17 @@ class ShakeToPickPromptDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header
+            // Bagian kepala dialog
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFAA7080), Color(0xFFC98C9C), Color(0xFFEFBEC9)],
+                  colors: [
+                    Color(0xFFAA7080),
+                    Color(0xFFC98C9C),
+                    Color(0xFFEFBEC9),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -1677,25 +1822,38 @@ class ShakeToPickPromptDialog extends StatelessWidget {
                   Text(
                     'Guncang pohon sakura dan temukan tiket\nAnniversary Giveaway berhadiah spesial!',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, height: 1.5, color: Color(0xFFFFE8EE)),
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: Color(0xFFFFE8EE),
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Content
+            // Bagian isi dialog
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 22),
               child: Column(
                 children: [
-                  _row(Icons.park_rounded, 'Guncang Pohon Sakura',
-                      'Goyang device-mu kuat-kuat agar tiket jatuh!'),
+                  _row(
+                    Icons.park_rounded,
+                    'Guncang Pohon Sakura',
+                    'Goyang device-mu kuat-kuat agar tiket jatuh!',
+                  ),
                   const SizedBox(height: 10),
-                  _row(Icons.confirmation_number_outlined, 'Peluang Gacha Berimbang',
-                      'Bisa dapat tiket undian atau kelopak zonk 🍃'),
+                  _row(
+                    Icons.confirmation_number_outlined,
+                    'Peluang Gacha Berimbang',
+                    'Bisa dapat tiket undian atau kelopak zonk 🍃',
+                  ),
                   const SizedBox(height: 10),
-                  _row(Icons.timer_outlined, 'Maksimal 3x per Hari',
-                      'Tiap hari ada 3x goyang. Kumpulkan tiket sebanyaknya!'),
+                  _row(
+                    Icons.timer_outlined,
+                    'Maksimal 3x per Hari',
+                    'Tiap hari ada 3x goyang. Kumpulkan tiket sebanyaknya!',
+                  ),
                   const SizedBox(height: 22),
                   SizedBox(
                     width: double.infinity,
@@ -1717,7 +1875,10 @@ class ShakeToPickPromptDialog extends StatelessWidget {
                       ),
                       child: const Text(
                         'Mulai Guncang Pohon! 🌸',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
                       ),
                     ),
                   ),
@@ -1726,7 +1887,10 @@ class ShakeToPickPromptDialog extends StatelessWidget {
                     onPressed: () => Navigator.pop(context),
                     child: const Text(
                       'Mungkin Nanti',
-                      style: TextStyle(color: MirroraTheme.warmGray, fontSize: 13),
+                      style: TextStyle(
+                        color: MirroraTheme.warmGray,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ],
@@ -1755,14 +1919,21 @@ class ShakeToPickPromptDialog extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: MirroraTheme.charcoal,
-                  )),
-              Text(sub,
-                  style: const TextStyle(fontSize: 11, color: MirroraTheme.warmGray)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: MirroraTheme.charcoal,
+                ),
+              ),
+              Text(
+                sub,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: MirroraTheme.warmGray,
+                ),
+              ),
             ],
           ),
         ),
@@ -1772,7 +1943,7 @@ class ShakeToPickPromptDialog extends StatelessWidget {
 }
 
 // =========================================================================
-// AMBIENT CIRCLE — decorative background blob (const-constructible)
+// AMBIENT CIRCLE — lingkaran dekoratif untuk latar (bisa dibuat const)
 // =========================================================================
 
 class _AmbientCircle extends StatelessWidget {

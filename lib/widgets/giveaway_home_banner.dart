@@ -420,10 +420,6 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
                     children: [
                       const Icon(Icons.people_outline_rounded, size: 12, color: MirroraTheme.dustyRose),
                       const SizedBox(width: 4),
-                      Text(
-                        '${campaign.participants.length} Entri Masuk',
-                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: MirroraTheme.charcoal),
-                      ),
                     ],
                   ),
                 ),
