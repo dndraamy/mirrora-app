@@ -214,6 +214,48 @@ class RoutineService extends ChangeNotifier {
     }
   }
 
+  /// Mengatur ulang urutan rutinitas secara drag-and-drop
+  Future<void> reorderRoutines(int oldIndex, int newIndex) async {
+    if (oldIndex < 0 || oldIndex >= _routines.length) return;
+    if (newIndex < 0 || newIndex >= _routines.length) return;
+
+    _routines = List<DailyRoutine>.from(_routines);
+    final item = _routines.removeAt(oldIndex);
+    _routines.insert(newIndex, item);
+
+    for (int i = 0; i < _routines.length; i++) {
+      _routines[i] = _routines[i].copyWith(orderIndex: i);
+    }
+
+    notifyListeners();
+    await _saveToStorage();
+  }
+
+  /// Mengatur ulang posisi rutinitas ketika dalam mode filter kategori (Pagi / Malam)
+  Future<void> reorderFilteredRoutines(List<DailyRoutine> newFilteredOrder) async {
+    _routines = List<DailyRoutine>.from(_routines);
+    final categoryIds = newFilteredOrder.map((e) => e.id).toSet();
+    final List<int> targetIndices = [];
+    for (int i = 0; i < _routines.length; i++) {
+      if (categoryIds.contains(_routines[i].id)) {
+        targetIndices.add(i);
+      }
+    }
+
+    if (targetIndices.length == newFilteredOrder.length) {
+      for (int i = 0; i < targetIndices.length; i++) {
+        _routines[targetIndices[i]] = newFilteredOrder[i];
+      }
+
+      for (int i = 0; i < _routines.length; i++) {
+        _routines[i] = _routines[i].copyWith(orderIndex: i);
+      }
+
+      notifyListeners();
+      await _saveToStorage();
+    }
+  }
+
   /// Menghapus rutinitas berdasarkan ID
   Future<void> deleteRoutine(String id) async {
     _routines = List<DailyRoutine>.from(_routines);

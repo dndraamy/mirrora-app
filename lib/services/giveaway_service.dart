@@ -55,6 +55,12 @@ class GiveawayService {
         campaign = GiveawayCampaign.fromJson(
           Map<String, dynamic>.from(campaignData as Map),
         );
+        final bool statusExplicitlySet =
+            _box.get('giveaway_status_explicitly_set', defaultValue: false) as bool;
+        if (!statusExplicitlySet && campaign.winnerBlock == null) {
+          campaign.status = GiveawayStatus.closed;
+          await _box.put(_campaignKey, campaign.toJson());
+        }
       } catch (_) {
         campaign = GiveawayCampaign.defaultCampaign();
       }
@@ -331,7 +337,10 @@ class GiveawayService {
 
     if (startDate != null) campaign.startDate = startDate;
     if (endDate != null) campaign.endDate = endDate;
-    if (status != null) campaign.status = status;
+    if (status != null) {
+      campaign.status = status;
+      await _box.put('giveaway_status_explicitly_set', true);
+    }
     if (title != null && title.trim().isNotEmpty) campaign.title = title.trim();
     if (prize != null && prize.trim().isNotEmpty) campaign.prize = prize.trim();
     if (description != null) campaign.description = description.trim();
@@ -366,7 +375,7 @@ class GiveawayService {
           'Rayakan 2 tahun perjalanan self-care bersama kami! Dapatkan kesempatan memenangkan 1 Set Skincare COSRX original gratis.',
       startDate: now.subtract(const Duration(days: 1)),
       endDate: now.add(const Duration(days: 7)),
-      status: GiveawayStatus.open,
+      status: GiveawayStatus.closed,
       participants: [
         GiveawayParticipant(
           userId: 'demo_user_01',
@@ -398,6 +407,7 @@ class GiveawayService {
     await _box.put(_blockchainKey, _blockchain.toJsonList());
 
     await _saveCampaign(newCampaign);
+    await _box.put('giveaway_status_explicitly_set', false);
   }
 
   Future<void> _saveCampaign(GiveawayCampaign campaign) async {

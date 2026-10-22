@@ -74,7 +74,7 @@ class WinnerCelebrationDialog extends StatelessWidget {
                   ),
                   const TextSpan(
                     text:
-                        ' terpilih secara acak dan sah melalui verifikasi Blockchain untuk memenangkan:\n',
+                        ' terpilih secara acak dan sah sebagai pemenang resmi:\n',
                   ),
                   TextSpan(
                     text: block.prize,
@@ -112,7 +112,7 @@ class WinnerCelebrationDialog extends StatelessWidget {
             ),
             const SizedBox(height: 22),
 
-            // Tombol Lihat Bukti Blockchain
+            // Tombol Lihat Sertifikat Resmi
             SizedBox(
               width: double.infinity,
               height: 46,
@@ -121,8 +121,8 @@ class WinnerCelebrationDialog extends StatelessWidget {
                   Navigator.pop(context);
                   BlockchainProofDialog.show(context, block);
                 },
-                icon: const Icon(Icons.link_rounded, size: 18),
-                label: const Text('Cek Bukti Blockchain ⛓️'),
+                icon: const Icon(Icons.verified_outlined, size: 18),
+                label: const Text('Lihat Sertifikat Resmi 📜'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: MirroraTheme.dustyRose,
                   side: const BorderSide(color: MirroraTheme.dustyRose),
