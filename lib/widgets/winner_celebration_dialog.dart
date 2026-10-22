@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/giveaway_model.dart';
 import '../theme/mirrora_theme.dart';
 import 'blockchain_proof_dialog.dart';
+import 'winner_claim_sheet.dart';
 
 class WinnerCelebrationDialog extends StatelessWidget {
   const WinnerCelebrationDialog({
@@ -89,7 +90,7 @@ class WinnerCelebrationDialog extends StatelessWidget {
             ),
             const SizedBox(height: 20),
 
-            // Petunjuk Klaim
+            // Petunjuk Klaim Data Diri
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -99,11 +100,11 @@ class WinnerCelebrationDialog extends StatelessWidget {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.card_giftcard_rounded, color: MirroraTheme.dustyRose, size: 20),
+                  Icon(Icons.edit_note_rounded, color: MirroraTheme.dustyRose, size: 22),
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Tim Mirrora akan menghubungi email akunmu untuk konfirmasi pengiriman paket hadiah.',
+                      'Silakan isi data diri kamu untuk klaim hadiah agar paket dapat segera kami kirimkan ke alamatmu.',
                       style: TextStyle(fontSize: 11.5, color: Color(0xFF4A4543), height: 1.4),
                     ),
                   ),
@@ -112,42 +113,63 @@ class WinnerCelebrationDialog extends StatelessWidget {
             ),
             const SizedBox(height: 22),
 
-            // Tombol Lihat Sertifikat Resmi
+            // Tombol Utama: Isi Data Diri Sekarang
             SizedBox(
               width: double.infinity,
-              height: 46,
-              child: OutlinedButton.icon(
+              height: 48,
+              child: ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  BlockchainProofDialog.show(context, block);
+                  WinnerClaimSheet.show(context, winnerBlock: block);
                 },
-                icon: const Icon(Icons.verified_outlined, size: 18),
-                label: const Text('Lihat Sertifikat Resmi 📜'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: MirroraTheme.dustyRose,
-                  side: const BorderSide(color: MirroraTheme.dustyRose),
+                icon: const Icon(Icons.card_giftcard_rounded, size: 20),
+                label: const Text('Isi Data Diri Sekarang 🎁', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: MirroraTheme.dustyRose,
+                  foregroundColor: MirroraTheme.white,
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(23),
+                    borderRadius: BorderRadius.circular(24),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 10),
 
-            // Tombol Tutup
+            // Tombol Lihat Sertifikat Resmi (Outlined)
             SizedBox(
               width: double.infinity,
-              height: 46,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: MirroraTheme.dustyRose,
-                  foregroundColor: MirroraTheme.white,
+              height: 42,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  BlockchainProofDialog.show(context, block);
+                },
+                icon: const Icon(Icons.verified_outlined, size: 16),
+                label: const Text('Lihat Sertifikat Resmi 📜', style: TextStyle(fontSize: 12.5)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: MirroraTheme.dustyRose,
+                  side: const BorderSide(color: MirroraTheme.blushPink),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(23),
+                    borderRadius: BorderRadius.circular(21),
                   ),
                 ),
-                child: const Text('Terima Kasih! ✨', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Tombol Nanti Saja (TextButton)
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: MirroraTheme.warmGray,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: const Text('Nanti Saja', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500)),
               ),
             ),
           ],
