@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/routine_model.dart';
-import '../services/notification_service.dart';
 import '../services/routine_service.dart';
 import '../theme/mirrora_theme.dart';
 
@@ -440,20 +439,6 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.notifications_active_rounded, color: MirroraTheme.dustyRose),
-              title: const Text('Tes Notifikasi HP', style: TextStyle(fontWeight: FontWeight.w600)),
-              subtitle: const Text('Kirim notifikasi pengingat ke status bar HP sekarang'),
-              onTap: () async {
-                Navigator.pop(ctx);
-                await NotificationService().showTestNotification();
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Notifikasi tes berhasil dikirim! Silakan periksa status bar HP kamu.')),
-                );
-              },
-            ),
-            const Divider(color: MirroraTheme.blushPink),
             ListTile(
               leading: const Icon(Icons.restart_alt_rounded, color: MirroraTheme.dustyRose),
               title: const Text('Mulai Ulang Checklist Hari Ini', style: TextStyle(fontWeight: FontWeight.w600)),
