@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/giveaway_model.dart';
@@ -22,6 +22,15 @@ class GiveawayHomeBanner extends StatefulWidget {
 class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
   final GiveawayService _service = GiveawayService();
   bool _isRegistering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final uid = _currentUserId ?? 'user_$widget.userName.toLowerCase()';
+      _service.refreshVoucherCount(uid);
+    });
+  }
 
   String? get _currentUserId =>
       Supabase.instance.client.auth.currentUser?.id;
@@ -121,7 +130,10 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
         }
 
         // Fase pendaftaran dibuka (open)
-        return _buildOpenBanner(campaign);
+        return ValueListenableBuilder<int>(
+          valueListenable: _service.voucherCountNotifier,
+          builder: (context, vouchersCount, child) => _buildOpenBanner(campaign),
+        );
       },
     );
   }
@@ -299,7 +311,7 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
               const SizedBox(height: 12),
             ],
 
-            // Action Buttons
+            // Action Buttons (SELALU ADA TOMBOL MASUKKAN TIKET)
             if (availableVouchers.isNotEmpty) ...[
               SizedBox(
                 width: double.infinity,
@@ -348,7 +360,7 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
             ] else ...[
               SizedBox(
                 width: double.infinity,
-                height: 42,
+                height: 44,
                 child: ElevatedButton.icon(
                   onPressed: _goToShakeToPick,
                   icon: const Text('🌸', style: TextStyle(fontSize: 15)),
@@ -360,7 +372,7 @@ class _GiveawayHomeBannerState extends State<GiveawayHomeBanner> {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MirroraTheme.dustyRose,
-                    foregroundColor: MirroraTheme.white,
+                    foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),

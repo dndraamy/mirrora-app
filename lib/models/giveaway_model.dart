@@ -424,7 +424,7 @@ class GiveawayCampaign {
           'Rayakan 2 tahun perjalanan self-care bersama kami! Dapatkan kesempatan memenangkan 1 Set Skincare COSRX original gratis.',
       startDate: now.subtract(const Duration(days: 1)),
       endDate: now.add(const Duration(days: 7)),
-      status: GiveawayStatus.closed,
+      status: GiveawayStatus.open,
       participants: [],
       winnerBlock: null,
     );

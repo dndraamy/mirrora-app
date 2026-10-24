@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -185,7 +185,20 @@ class GiveawayService {
   /// Ambil daftar voucher tiket yang dimenangkan user dari Shake to Pick tapi belum dimasukkan ke undian
   List<String> getAvailableVouchers(String uid) {
     final list = _box.get('user_available_vouchers_$uid') as List<dynamic>?;
-    return list != null ? list.map((e) => e.toString()).toList() : [];
+    if (list != null && list.isNotEmpty) {
+      return list.map((e) => e.toString()).toList();
+    }
+    // Fallback: cek apakah tiket tersimpan di 'anonymous' (misal sebelum login)
+    if (uid != 'anonymous') {
+      final anonList = _box.get('user_available_vouchers_anonymous') as List<dynamic>?;
+      if (anonList != null && anonList.isNotEmpty) {
+        final result = anonList.map((e) => e.toString()).toList();
+        _box.put('user_available_vouchers_$uid', result);
+        _box.delete('user_available_vouchers_anonymous');
+        return result;
+      }
+    }
+    return [];
   }
 
   /// Tambah voucher tiket baru hasil menang Shake to Pick

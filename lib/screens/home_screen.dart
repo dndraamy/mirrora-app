@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -113,9 +113,15 @@ class _HomeScreenState extends State<HomeScreen> {
     WinnerCelebrationDialog.show(context, winnerBlock);
   }
 
-  /// Tampilkan dialog Shake to Pick sekali per hari (per akun).
+  /// Tampilkan dialog Shake to Pick sekali per hari (per akun),
+  /// hanya jika ada giveaway yang sedang dibuka.
   Future<void> _maybeShowDailyPrompt() async {
     if (!mounted) return;
+
+    // Jangan tampilkan prompt shake jika tidak ada giveaway aktif
+    final campaign = GiveawayService().currentCampaign;
+    if (!campaign.isOpen) return;
+
     final box = Hive.box('settingsBox');
     final uid = Supabase.instance.client.auth.currentUser?.id ?? 'anonymous';
     final today = DateTime.now();
@@ -834,19 +840,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ----------------------------------------------------------- QUICK ACCESS
   Widget _buildQuickAccess() {
+    final isGiveawayOpen = GiveawayService().currentCampaign.isOpen;
     return Row(
       children: [
-        Expanded(
-          child: _QuickAccessCard(
-            icon: Icons.vibration_rounded,
-            label: 'Shake to Pick',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ShakeToPickScreen()),
+        if (isGiveawayOpen) ...[ 
+          Expanded(
+            child: _QuickAccessCard(
+              icon: Icons.vibration_rounded,
+              label: 'Shake to Pick',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ShakeToPickScreen()),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
+          const SizedBox(width: 12),
+        ],
         Expanded(
           child: _QuickAccessCard(
             icon: Icons.sports_esports_outlined,

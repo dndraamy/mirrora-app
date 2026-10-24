@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -17,7 +17,7 @@ String _kWindowStartMs(String uid) => 'shake_window_start_ms_$uid';
 String _kCountInWindow(String uid) => 'shake_count_in_window_$uid';
 
 // ─── Batas penggunaan (rate limit) ──────────────────────────────────────────
-const int _maxShakesPerWindow = 10;
+const int _maxShakesPerWindow = 5;
 const Duration _windowDuration = Duration(hours: 24);
 
 // ─── Parameter guncangan ────────────────────────────────────────────────────
@@ -358,7 +358,9 @@ class _ClusterSpec {
 // =========================================================================
 
 class ShakeToPickScreen extends StatefulWidget {
-  const ShakeToPickScreen({super.key});
+  const ShakeToPickScreen({super.key, this.userName});
+
+  final String? userName;
 
   @override
   State<ShakeToPickScreen> createState() => _ShakeToPickScreenState();
@@ -369,8 +371,14 @@ enum _PickState { idle, result }
 class _ShakeToPickScreenState extends State<ShakeToPickScreen>
     with TickerProviderStateMixin {
   // ── User ID Supabase (batas shake dipisah per akun) ───────────────────────
-  String get _uid =>
-      Supabase.instance.client.auth.currentUser?.id ?? 'anonymous';
+  String get _uid {
+    final supaId = Supabase.instance.client.auth.currentUser?.id;
+    if (supaId != null && supaId.isNotEmpty) return supaId;
+    final name = (widget.userName != null && widget.userName!.trim().isNotEmpty)
+        ? widget.userName!.trim().toLowerCase()
+        : 'sarah';
+    return 'user_$name';
+  }
 
   // ── Ticker game (loop 60fps) ──────────────────────────────────────────────
   late final Ticker _ticker;
@@ -1853,8 +1861,8 @@ class ShakeToPickPromptDialog extends StatelessWidget {
                   const SizedBox(height: 10),
                   _row(
                     Icons.timer_outlined,
-                    'Maksimal 3x per Hari',
-                    'Tiap hari ada 3x goyang. Kumpulkan tiket sebanyaknya!',
+                    'Maksimal 5x per Hari',
+                    'Tiap hari ada 5x goyang. Kumpulkan tiket sebanyaknya!',
                   ),
                   const SizedBox(height: 22),
                   SizedBox(
