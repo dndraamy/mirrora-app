@@ -88,7 +88,7 @@ class _MirroraAssistantScreenState extends State<MirroraAssistantScreen> {
         id: 'welcome',
         text:
             'Hai, ${widget.userName}!\n\n'
-            'Aku Mirrora Assistant, .\n\n'
+            'Aku Mirrora Assistant.\n'
             'Kamu bisa berkonsultasi seputar skincare, makeup, self-care, dan tips-tips lainnya denganku\n\n'
             'Ada yang ingin kamu tanyakan hari ini?',
         isUser: false,
