@@ -17,17 +17,22 @@ class AdminGiveawayScreen extends StatefulWidget {
   State<AdminGiveawayScreen> createState() => _AdminGiveawayScreenState();
 }
 
-class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
+class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsBindingObserver {
   final GiveawayService _service = GiveawayService();
 
   late TextEditingController _titleController;
   late TextEditingController _prizeController;
 
   bool _isDrawing = false;
+  bool _isSessionLocked = false;
+  final TextEditingController _unlockPasswordController = TextEditingController();
+  bool _unlockObscure = true;
+  String? _unlockErrorMessage;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final c = _service.currentCampaign;
     _titleController = TextEditingController(text: c.title);
     _prizeController = TextEditingController(text: c.prize);
@@ -35,9 +40,27 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _titleController.dispose();
     _prizeController.dispose();
+    _unlockPasswordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Kunci sesi otomatis saat aplikasi ditutup/diminimalkan/ke background
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      if (mounted && !_isSessionLocked) {
+        setState(() {
+          _isSessionLocked = true;
+          _unlockErrorMessage = null;
+          _unlockPasswordController.clear();
+        });
+      }
+    }
   }
 
   void _showMessage(String text) {
@@ -294,9 +317,9 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: MirroraTheme.blushPink),
         ),
-        title: const Text('Reset Undian?'),
+        title: const Text('Mulai Ulang Periode Undian?'),
         content: const Text(
-          'Seluruh status pemenang dan blockchain lokal akan dikembalikan ke kondisi awal (Genesis).',
+          'Seluruh status dan data pemenang undian saat ini akan dibersihkan untuk memulai periode undian baru.',
           style: TextStyle(fontSize: 12.5, color: MirroraTheme.warmGray),
         ),
         actions: [
@@ -312,7 +335,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Ya, Reset'),
+            child: const Text('Ya, Mulai Ulang'),
           ),
         ],
       ),
@@ -324,7 +347,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
       _titleController.text = c.title;
       _prizeController.text = c.prize;
       setState(() {});
-      _showMessage('Giveaway berhasil direset!');
+      _showMessage('Periode undian berhasil dimulai ulang!');
     }
   }
 
@@ -441,20 +464,39 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
             onPressed: () => Navigator.pop(context),
           ),
         ),
-        title: const Text(
-          'Portal Undian Owner',
-          style: TextStyle(
+        title: Text(
+          _isSessionLocked ? 'Autentikasi Owner' : 'Portal Undian Owner',
+          style: const TextStyle(
             fontSize: 17,
             fontWeight: FontWeight.w700,
             color: MirroraTheme.charcoal,
             letterSpacing: -0.2,
           ),
         ),
+        actions: [
+          if (!_isSessionLocked)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                icon: const Icon(Icons.lock_outline_rounded, color: MirroraTheme.dustyRose, size: 20),
+                tooltip: 'Kunci Sesi Admin',
+                onPressed: () {
+                  setState(() {
+                    _isSessionLocked = true;
+                    _unlockErrorMessage = null;
+                    _unlockPasswordController.clear();
+                  });
+                },
+              ),
+            ),
+        ],
       ),
       body: SafeArea(
-        child: ValueListenableBuilder<GiveawayCampaign>(
-          valueListenable: _service.campaignNotifier,
-          builder: (context, campaign, _) {
+        child: _isSessionLocked
+            ? _buildSessionLockView()
+            : ValueListenableBuilder<GiveawayCampaign>(
+                valueListenable: _service.campaignNotifier,
+                builder: (context, campaign, _) {
             final isChainValid = _service.blockchain.verifyIntegrity();
             final blocksCount = _service.blockchain.chain.length;
             final claim = campaign.winnerClaimData;
@@ -685,7 +727,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
                                     ),
                                     TextButton(
                                       onPressed: () => BlockchainProofDialog.show(context, campaign.winnerBlock!),
-                                      child: const Text('Bukti Blockchain ⛓️', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: MirroraTheme.dustyRose)),
+                                      child: const Text('Sertifikat Resmi 📜', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: MirroraTheme.dustyRose)),
                                     ),
                                   ],
                                 ),
@@ -898,10 +940,10 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
 
                   const SizedBox(height: 16),
 
-                  // BLOCKCHAIN LEDGER STATS
+                  // SISTEM VERIFIKASI PEMENANG
                   _buildCard(
-                    title: 'Blockchain Ledger ($blocksCount Blok)',
-                    icon: Icons.link_rounded,
+                    title: 'Sistem Verifikasi & Integritas ($blocksCount Catatan)',
+                    icon: Icons.verified_user_outlined,
                     child: Column(
                       children: [
                         Row(
@@ -911,8 +953,8 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
                             Expanded(
                               child: Text(
                                 isChainValid
-                                    ? 'Integritas Rantai: 100% Sah & Terverifikasi'
-                                    : 'Integritas Rantai: Terdeteksi Mutasi Data!',
+                                    ? 'Integritas Sistem: Terverifikasi & Aman'
+                                    : 'Integritas Sistem: Terdeteksi Perubahan Data!',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w700,
@@ -932,7 +974,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
                               side: const BorderSide(color: Colors.redAccent),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: const Text('Reset Undian (Testing Mode)', style: TextStyle(fontWeight: FontWeight.w700)),
+                            child: const Text('Mulai Ulang Periode Undian', style: TextStyle(fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ],
@@ -1021,5 +1063,179 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> {
         ),
       ),
     );
+  }
+
+  /// Tampilan Pengaman Sesi Ketika Aplikasi Ditutup / Diminimalkan
+  Widget _buildSessionLockView() {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: MirroraTheme.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: MirroraTheme.blushPink),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Icon Gembok Terkunci
+              Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: MirroraTheme.dustyRose.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(Icons.lock_rounded, color: MirroraTheme.dustyRose, size: 32),
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              const Text(
+                'Sesi Admin Terkunci',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: MirroraTheme.charcoal,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              const Text(
+                'Aplikasi sempat diminimalkan atau ditutup. Demi menjaga keamanan data undian, masukkan kembali Master Passphrase Owner untuk membuka halaman admin.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.45,
+                  color: MirroraTheme.warmGray,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Form Input Password
+              TextField(
+                controller: _unlockPasswordController,
+                obscureText: _unlockObscure,
+                autofocus: true,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: MirroraTheme.charcoal,
+                ),
+                onSubmitted: (_) => _unlockSession(),
+                decoration: InputDecoration(
+                  labelText: 'Master Passphrase Owner',
+                  labelStyle: const TextStyle(fontSize: 12.5, color: MirroraTheme.warmGray),
+                  filled: true,
+                  fillColor: MirroraTheme.cream,
+                  prefixIcon: const Icon(Icons.key_rounded, size: 18, color: MirroraTheme.dustyRose),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: _unlockErrorMessage != null ? Colors.redAccent : Colors.transparent,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: _unlockErrorMessage != null ? Colors.redAccent : Colors.transparent,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(
+                      color: _unlockErrorMessage != null ? Colors.redAccent : MirroraTheme.dustyRose,
+                    ),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _unlockObscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                      size: 18,
+                      color: MirroraTheme.warmGray,
+                    ),
+                    onPressed: () => setState(() => _unlockObscure = !_unlockObscure),
+                  ),
+                ),
+              ),
+              if (_unlockErrorMessage != null) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _unlockErrorMessage!,
+                    style: const TextStyle(fontSize: 11.5, color: Colors.redAccent, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+
+              // Tombol Buka Halaman Admin
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: _unlockSession,
+                  icon: const Icon(Icons.lock_open_rounded, size: 18),
+                  label: const Text('Buka Halaman Admin', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: MirroraTheme.dustyRose,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Tombol Keluar ke Menu Sebelumnya
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Keluar dari Halaman Admin',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: MirroraTheme.warmGray,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _unlockSession() {
+    final input = _unlockPasswordController.text.trim();
+    final isValid = AdminAuthService().verifyMasterKey(input);
+    if (isValid) {
+      setState(() {
+        _isSessionLocked = false;
+        _unlockErrorMessage = null;
+        _unlockPasswordController.clear();
+      });
+      _showMessage('Sesi admin berhasil dibuka kembali!');
+    } else {
+      setState(() {
+        _unlockErrorMessage = 'Passphrase salah, silakan coba lagi.';
+        _unlockPasswordController.clear();
+      });
+    }
   }
 }

@@ -336,7 +336,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'Enkripsi Kriptografis Aman',
+                              'Keamanan Akun Terjamin',
                               style: TextStyle(
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
@@ -345,7 +345,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              'Kata sandi Anda diproteksi dengan hashing berstandar industri sehingga aman terlindungi.',
+                              'Kata sandi Anda diproteksi dengan enkripsi berstandar tinggi sehingga selalu aman terlindungi.',
                               style: TextStyle(
                                 fontSize: 11.5,
                                 height: 1.45,

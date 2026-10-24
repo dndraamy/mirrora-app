@@ -1,15 +1,16 @@
-import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import '../theme/mirrora_theme.dart';
 import '../widgets/mirrora_bottom_nav.dart';
-import 'ai_assistant_screen.dart';
 import 'explore_screen.dart';
 import 'home_screen.dart';
+import 'mirrora_assistant_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 
-/// Container utama setelah login: 5 tab (Home, Explore, AI, Profil, Settings).
+/// Container utama setelah login: 5 tab
+/// (Home, Explore, Assistant [Mirrora Assistant LLM], Profil, Settings).
 class MainNavigation extends StatefulWidget {
   const MainNavigation({
     super.key,
@@ -43,9 +44,14 @@ class _MainNavigationState extends State<MainNavigation> {
   @override
   Widget build(BuildContext context) {
     final screens = <Widget>[
-      HomeScreen(userName: _userName),
+      HomeScreen(
+        userName: _userName,
+        onNavigateTab: (tabIndex) {
+          setState(() => _currentIndex = tabIndex);
+        },
+      ),
       const ExploreScreen(),
-      AiAssistantScreen(userName: _userName),
+      MirroraAssistantScreen(userName: _userName),
       ProfileScreen(
         userName: _userName,
         onProfileChanged: (name) {

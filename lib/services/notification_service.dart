@@ -371,7 +371,7 @@ class NotificationService {
     await _notificationsPlugin.show(
       id: 70002,
       title: '🏆 Pemenang Giveaway Telah Diundi!',
-      body: 'Selamat kepada $winnerName ($ticketNumber) atas kemenangannya! Hasil sah terkunci di blockchain lokal.',
+      body: 'Selamat kepada $winnerName ($ticketNumber) atas kemenangannya! Buka Mirrora untuk melihat pengumuman resmi.',
       notificationDetails: details,
       payload: 'giveaway_drawn',
     );
@@ -414,41 +414,6 @@ class NotificationService {
       body: 'Tiketmu $ticketNumber terpilih sebagai pemenang $prize! Buka Mirrora dan isi data dirimu untuk verifikasi pengiriman hadiah.',
       notificationDetails: details,
       payload: 'giveaway_winner_claim',
-    );
-  }
-
-  /// Notifikasi tes langsung
-  Future<void> showTestNotification() async {
-    if (kIsWeb) return;
-    if (!_isInitialized) await init();
-
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      _routineChannelId,
-      _routineChannelName,
-      channelDescription: _routineChannelDesc,
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      enableVibration: true,
-        icon: '@drawable/ic_notification',
-        color: Color(0xFFC56B84),
-        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
-    );
-
-    const NotificationDetails details = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      ),
-    );
-
-    await _notificationsPlugin.show(
-      id: 99999,
-      title: 'Pengingat Skincare Mirrora Aktif! ✨',
-      body: 'Notifikasi harian dan informasi giveaway akan otomatis muncul di perangkat kamu.',
-      notificationDetails: details,
     );
   }
 }

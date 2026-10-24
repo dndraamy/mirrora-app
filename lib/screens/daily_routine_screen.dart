@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/routine_model.dart';
+import '../services/notification_service.dart';
 import '../services/routine_service.dart';
 import '../theme/mirrora_theme.dart';
 
@@ -42,6 +43,19 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
     final all = _routineService.routines;
     if (_selectedCategory == 'Semua') return all;
     return all.where((r) => r.category.toLowerCase() == _selectedCategory.toLowerCase()).toList();
+  }
+
+  void _onReorder(int oldIndex, int newIndex) {
+    if (_selectedCategory == 'Semua') {
+      _routineService.reorderRoutines(oldIndex, newIndex);
+    } else {
+      final currentList = List<DailyRoutine>.from(_filteredRoutines);
+      if (oldIndex < 0 || oldIndex >= currentList.length) return;
+      if (newIndex < 0 || newIndex > currentList.length) return;
+      final movedItem = currentList.removeAt(oldIndex);
+      currentList.insert(newIndex, movedItem);
+      _routineService.reorderFilteredRoutines(currentList);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -440,6 +454,20 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
             ),
             const SizedBox(height: 16),
             ListTile(
+              leading: const Icon(Icons.notifications_outlined, color: MirroraTheme.dustyRose),
+              title: const Text('Pengingat Skincare', style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Sinkronkan jadwal alarm pengingat di perangkat'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await NotificationService().syncAllRoutineNotifications(_routineService.routines);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Jadwal pengingat skincare berhasil disinkronkan!')),
+                );
+              },
+            ),
+            const Divider(color: MirroraTheme.blushPink),
+            ListTile(
               leading: const Icon(Icons.restart_alt_rounded, color: MirroraTheme.dustyRose),
               title: const Text('Mulai Ulang Checklist Hari Ini', style: TextStyle(fontWeight: FontWeight.w600)),
               subtitle: const Text('Kosongkan semua tanda centang untuk memulai hari'),
@@ -646,17 +674,78 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
             ),
           ),
 
-          // 3. Daftar Rutinitas Skincare
+          // 3. Hint Drag to Reorder
+          if (routines.length > 1)
+            Container(
+              color: MirroraTheme.white,
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: MirroraTheme.cream,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: MirroraTheme.blushPink),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.drag_indicator_rounded,
+                      size: 16,
+                      color: MirroraTheme.dustyRose,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Tahan & geser ikon ⠿ untuk menyesuaikan urutan langkah',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                          color: MirroraTheme.charcoal,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${routines.length} Langkah',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: MirroraTheme.dustyRose,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // 4. Daftar Rutinitas Skincare (Dapat Diatur Urutannya)
           Expanded(
             child: routines.isEmpty
                 ? _buildEmptyState()
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+                : ReorderableListView.builder(
+                    buildDefaultDragHandles: false,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
                     itemCount: routines.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    onReorderItem: _onReorder,
+                    proxyDecorator: (child, index, animation) {
+                      return AnimatedBuilder(
+                        animation: animation,
+                        builder: (context, child) {
+                          final animValue = Curves.easeInOut.transform(animation.value);
+                          final elevation = animValue * 8.0;
+                          return Material(
+                            elevation: elevation,
+                            color: Colors.transparent,
+                            shadowColor: MirroraTheme.dustyRose.withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(18),
+                            child: child,
+                          );
+                        },
+                        child: child,
+                      );
+                    },
                     itemBuilder: (context, index) {
                       final item = routines[index];
-                      return _buildRoutineItemCard(item);
+                      return _buildRoutineItemCard(item, index);
                     },
                   ),
           ),
@@ -670,8 +759,10 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
   // ---------------------------------------------------------------------------
   // Kartu Masing-masing Rutinitas
   // ---------------------------------------------------------------------------
-  Widget _buildRoutineItemCard(DailyRoutine item) {
+  Widget _buildRoutineItemCard(DailyRoutine item, int index) {
     return Container(
+      key: ValueKey(item.id),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: MirroraTheme.white,
         borderRadius: BorderRadius.circular(18),
@@ -696,6 +787,34 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
             padding: const EdgeInsets.all(14),
             child: Row(
               children: [
+                // Nomor Urut Langkah (Step Sequence)
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: item.isCompleted
+                        ? MirroraTheme.dustyRose.withValues(alpha: 0.12)
+                        : MirroraTheme.cream,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: item.isCompleted
+                          ? MirroraTheme.dustyRose.withValues(alpha: 0.3)
+                          : MirroraTheme.blushPink,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: item.isCompleted ? MirroraTheme.dustyRose : MirroraTheme.charcoal,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+
                 // Checkbox Bulat Estetik
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -717,7 +836,7 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
                         : null,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
 
                 // Judul & Detail Rutinitas
                 Expanded(
@@ -825,6 +944,23 @@ class _DailyRoutineScreenState extends State<DailyRoutineScreen> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(width: 2),
+
+                // Drag Handle
+                ReorderableDragStartListener(
+                  index: index,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    child: Tooltip(
+                      message: 'Tahan & geser untuk mengubah urutan',
+                      child: Icon(
+                        Icons.drag_indicator_rounded,
+                        size: 22,
+                        color: MirroraTheme.warmGray,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),

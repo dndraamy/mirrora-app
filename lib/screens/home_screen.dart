@@ -12,16 +12,21 @@ import '../theme/mirrora_theme.dart';
 import '../widgets/giveaway_home_banner.dart';
 import '../widgets/winner_celebration_dialog.dart';
 import 'bubble_pop_screen.dart';
+import 'ai_product_scanner_screen.dart';
 import 'daily_routine_screen.dart';
-import 'favorite_products_screen.dart';
 import 'nearby_stores_screen.dart';
 import 'notification_settings_screen.dart';
 import 'shake_to_pick_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.userName = 'Sarah'});
+  const HomeScreen({
+    super.key,
+    this.userName = 'Sarah',
+    this.onNavigateTab,
+  });
 
   final String userName;
+  final ValueChanged<int>? onNavigateTab;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -855,12 +860,12 @@ class _HomeScreenState extends State<HomeScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: _QuickAccessCard(
-            icon: Icons.favorite_rounded,
-            label: 'Produk Favorit',
+            icon: Icons.camera_alt_rounded,
+            label: 'AI',
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => const FavoriteProductsScreen(),
+                builder: (_) => AiProductScannerScreen(userName: widget.userName),
               ),
             ),
           ),

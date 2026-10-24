@@ -365,12 +365,14 @@ class GiveawayCampaign {
       };
 
   factory GiveawayCampaign.fromJson(Map<String, dynamic> json) {
-    GiveawayStatus parsedStatus = GiveawayStatus.open;
+    GiveawayStatus parsedStatus = GiveawayStatus.closed;
     final statusStr = json['status'] as String?;
-    if (statusStr == 'closed') {
-      parsedStatus = GiveawayStatus.closed;
+    if (statusStr == 'open') {
+      parsedStatus = GiveawayStatus.open;
     } else if (statusStr == 'drawn') {
       parsedStatus = GiveawayStatus.drawn;
+    } else {
+      parsedStatus = GiveawayStatus.closed;
     }
 
     final participantsJson = json['participants'] as List<dynamic>? ?? [];
@@ -422,7 +424,7 @@ class GiveawayCampaign {
           'Rayakan 2 tahun perjalanan self-care bersama kami! Dapatkan kesempatan memenangkan 1 Set Skincare COSRX original gratis.',
       startDate: now.subtract(const Duration(days: 1)),
       endDate: now.add(const Duration(days: 7)),
-      status: GiveawayStatus.open,
+      status: GiveawayStatus.closed,
       participants: [
         GiveawayParticipant(
           userId: 'demo_user_01',

@@ -36,9 +36,9 @@ class MirroraBottomNav extends StatelessWidget {
       label: 'Explore',
     ),
     MirroraNavItem(
-      icon: Icons.auto_awesome_outlined,
-      activeIcon: Icons.auto_awesome_rounded,
-      label: 'AI',
+      icon: Icons.chat_bubble_outline_rounded,
+      activeIcon: Icons.chat_bubble_rounded,
+      label: 'Assistant',
     ),
     MirroraNavItem(
       icon: Icons.person_outline_rounded,
@@ -57,19 +57,19 @@ class MirroraBottomNav extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: MirroraTheme.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
         boxShadow: [
           BoxShadow(
-            color: MirroraTheme.dustyRose.withValues(alpha: 0.18),
-            blurRadius: 24,
-            offset: const Offset(0, -6),
+            color: MirroraTheme.dustyRose.withValues(alpha: 0.16),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
           ),
         ],
       ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
           child: Row(
             children: List.generate(items.length, (index) {
               return Expanded(
@@ -103,43 +103,46 @@ class _NavButton extends StatelessWidget {
     final color = selected ? MirroraTheme.dustyRose : MirroraTheme.warmGray;
 
     return Semantics(
-      button: true,
-      selected: selected,
       label: item.label,
+      selected: selected,
+      button: true,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        splashColor: MirroraTheme.blushPink,
-        highlightColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(vertical: 4),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                width: 56,
-                height: 32,
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
-                  color: selected ? MirroraTheme.blushPink : Colors.transparent,
-                  borderRadius: BorderRadius.circular(16),
+                  color: selected
+                      ? MirroraTheme.blushPink.withValues(alpha: 0.8)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Icon(
                   selected ? item.activeIcon : item.icon,
-                  size: 24,
                   color: color,
+                  size: 24,
                 ),
               ),
-              const SizedBox(height: 4),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 220),
+              const SizedBox(height: 3),
+              Text(
+                item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                   color: color,
+                  letterSpacing: -0.2,
                 ),
-                child: Text(item.label),
               ),
             ],
           ),

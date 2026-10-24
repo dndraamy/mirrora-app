@@ -28,19 +28,78 @@ class AiChatMessage {
         'text': text,
         'isUser': isUser,
         'timestamp': timestamp.toIso8601String(),
+        if (imageBytes != null) 'imageB64': base64Encode(imageBytes!),
       };
 
-  factory AiChatMessage.fromMap(Map<dynamic, dynamic> map) => AiChatMessage(
-        id: map['id']?.toString() ?? '',
-        text: map['text']?.toString() ?? '',
-        isUser: map['isUser'] as bool? ?? false,
-        timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
-            DateTime.now(),
-      );
+  factory AiChatMessage.fromMap(Map<dynamic, dynamic> map) {
+    Uint8List? bytes;
+    final b64 = map['imageB64']?.toString();
+    if (b64 != null && b64.isNotEmpty) {
+      try {
+        bytes = base64Decode(b64);
+      } catch (_) {}
+    }
+    return AiChatMessage(
+      id: map['id']?.toString() ?? '',
+      text: map['text']?.toString() ?? '',
+      isUser: map['isUser'] as bool? ?? false,
+      timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
+          DateTime.now(),
+      imageBytes: bytes,
+    );
+  }
 }
 
-/// Chat AI lewat Supabase Edge Function `ai-chat`.
-/// API key Gemini TIDAK ada di aplikasi, hanya di Supabase Secrets.
+/// Model riwayat pemindaian produk pada fitur AI Product Scanner
+class AiProductScan {
+  AiProductScan({
+    required this.id,
+    required this.productName,
+    required this.category,
+    required this.analysisResult,
+    required this.timestamp,
+    this.imageBytes,
+  });
+
+  final String id;
+  final String productName;
+  final String category;
+  final String analysisResult;
+  final DateTime timestamp;
+  final Uint8List? imageBytes;
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'productName': productName,
+        'category': category,
+        'analysisResult': analysisResult,
+        'timestamp': timestamp.toIso8601String(),
+        if (imageBytes != null) 'imageB64': base64Encode(imageBytes!),
+      };
+
+  factory AiProductScan.fromMap(Map<dynamic, dynamic> map) {
+    Uint8List? bytes;
+    final b64 = map['imageB64']?.toString();
+    if (b64 != null && b64.isNotEmpty) {
+      try {
+        bytes = base64Decode(b64);
+      } catch (_) {}
+    }
+    return AiProductScan(
+      id: map['id']?.toString() ?? '',
+      productName: map['productName']?.toString() ?? 'Produk Skincare/Makeup',
+      category: map['category']?.toString() ?? 'Skincare',
+      analysisResult: map['analysisResult']?.toString() ?? '',
+      timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ??
+          DateTime.now(),
+      imageBytes: bytes,
+    );
+  }
+}
+
+/// Service untuk memfasilitasi dua fitur utama:
+/// 1. Menu AI: Product Scanner (Vision/Pengenalan Produk via Kamera/Galeri)
+/// 2. Menu Mirrora Assistant: LLM Chatbot Asisten Beauty, Self-Care, Skincare, & Makeup
 class AiService {
   AiService._();
   static final AiService _instance = AiService._();
@@ -64,6 +123,17 @@ class AiService {
     return 'mirrora_chat_user_$id';
   }
 
+  /// Kunci penyimpanan riwayat scan produk AI per akun yang sedang login
+  String _getUserScanStorageKey([String? fallbackIdentifier]) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null && user.id.isNotEmpty) {
+      return 'mirrora_scans_uid_${user.id}';
+    }
+    final id = (fallbackIdentifier ?? 'default').toLowerCase().trim();
+    return 'mirrora_scans_user_$id';
+  }
+
+  // ------------------------------------------------------------- CHAT ASSISTANT
   Future<List<AiChatMessage>> loadChatHistory([
     String? fallbackIdentifier,
   ]) async {
@@ -95,13 +165,109 @@ class AiService {
     await _settings.delete(key);
   }
 
-  /// Kompatibilitas: sekarang server yang mengatur sesi, jadi tidak ada
-  /// state sesi di aplikasi. Dibiarkan agar pemanggil lama tidak error.
   void clearChatSession() {}
 
-  /// Kirim pesan (teks, atau teks + gambar) dan kembalikan jawaban AI.
-  /// [existingHistory] boleh sudah memuat pesan yang sedang dikirim,
-  /// pesan terakhir user akan dibuang supaya tidak terkirim dua kali.
+  // -------------------------------------------------------- PRODUCT SCAN HISTORY
+  Future<List<AiProductScan>> loadProductScans([
+    String? fallbackIdentifier,
+  ]) async {
+    final key = _getUserScanStorageKey(fallbackIdentifier);
+    final dynamic raw = _settings.get(key);
+    final list = <AiProductScan>[];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map) list.add(AiProductScan.fromMap(item));
+      }
+    }
+    // Urutkan dari yang paling baru
+    list.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return list;
+  }
+
+  Future<void> saveProductScan(
+    AiProductScan scan, [
+    String? fallbackIdentifier,
+  ]) async {
+    final existing = await loadProductScans(fallbackIdentifier);
+    existing.insert(0, scan);
+    // Simpan maksimal 30 scan terakhir
+    final trimmed = existing.take(30).map((s) => s.toMap()).toList();
+    final key = _getUserScanStorageKey(fallbackIdentifier);
+    await _settings.put(key, trimmed);
+  }
+
+  Future<void> deleteProductScan(
+    String scanId, [
+    String? fallbackIdentifier,
+  ]) async {
+    final existing = await loadProductScans(fallbackIdentifier);
+    existing.removeWhere((s) => s.id == scanId);
+    final key = _getUserScanStorageKey(fallbackIdentifier);
+    await _settings.put(key, existing.map((s) => s.toMap()).toList());
+  }
+
+  Future<void> clearProductScans([String? fallbackIdentifier]) async {
+    final key = _getUserScanStorageKey(fallbackIdentifier);
+    await _settings.delete(key);
+  }
+
+  // ------------------------------------------------------------- AI CALLS
+  /// 1. Fitur AI: Scan & Identifikasi Produk dari Foto
+  Future<String> scanProduct({
+    required Uint8List imageBytes,
+    String? additionalNotes,
+  }) async {
+    final queryText = additionalNotes != null && additionalNotes.trim().isNotEmpty
+        ? '\nCatatan/Pertanyaan tambahan dari pengguna: "${additionalNotes.trim()}"'
+        : '';
+
+    final prompt =
+        'Kamu adalah AI Beauty & Skincare Product Scanner dalam aplikasi Mirrora.\n'
+        'Tugasmu adalah menganalisis foto kemasan atau produk skincare/makeup ini secara detail, akurat, dan terstruktur.\n'
+        '$queryText\n\n'
+        'Berikan rincian penjelasan lengkap dengan urutan berikut:\n'
+        '1. NAMA & MEREK PRODUK: (Sebutkan nama produk dan brand yang terlihat jelas di kemasan)\n'
+        '2. KATEGORI & FUNGSI UTAMA: (Misal: Gentle Cleanser, Hydrating Toner, Brightening Serum, Physical Sunscreen, Cushion, dll.)\n'
+        '3. MANFAAT PRODUK: (Manfaat utama produk bagi kesehatan kulit atau tampilan wajah)\n'
+        '4. KANDUNGAN KUNCI (KEY INGREDIENTS): (Bahan aktif utama seperti Niacinamide, Salicylic Acid, Ceramide, Hyaluronic Acid, dll. beserta fungsinya)\n'
+        '5. CARA & WAKTU PAKAI: (Pagi atau malam hari, urutan pemakaian sebelum/setelah produk apa, serta cara pengaplikasian yang tepat)\n'
+        '6. KECOCOKAN TIPE KULIT: (Sesuai untuk kulit berminyak, kering, kombinasi, sensitif, atau berjerawat)\n'
+        '7. CATATAN & PERHATIAN: (Peringatan pemakaian, alcohol/fragrance note jika ada, dan anjuran patch test)\n\n'
+        'PANDUAN FORMAT:\n'
+        '- Gunakan Bahasa Indonesia yang ramah, bersih, dan jelas.\n'
+        '- JANGAN gunakan tanda pagar Markdown (#, ##) untuk header.\n'
+        '- JANGAN gunakan tanda bintang (* atau **) untuk menebalkan kata.\n'
+        '- Gunakan penomoran dan bullet (•) yang rapi agar nyaman dibaca di layar HP.';
+
+    return sendMessage(
+      prompt: prompt,
+      imageBytes: imageBytes,
+      existingHistory: const [],
+    );
+  }
+
+  /// 2. Fitur LLM: Mirrora Assistant dengan Guardrails Ketat
+  /// Hanya boleh menjawab topik Beauty, Self-Care, Skincare, dan Makeup.
+  Future<String> askAssistant({
+    required String userQuery,
+    List<AiChatMessage>? existingHistory,
+  }) async {
+    // Sisipkan pengarah guardrails agar LLM menolak pertanyaan di luar 4 pilar
+    final promptWithGuardrail =
+        '[INSTRUKSI SISTEM MIRRORA ASSISTANT: Kamu adalah "Mirrora Assistant", asisten konsultasi yang KHUSUS berfokus pada Beauty, Self-Care, Skincare, dan Makeup. '
+        'Jika pertanyaan pengguna berkaitan dengan salah satu dari 4 topik tersebut, jawablah dengan ramah, edukatif, dan praktis seperti beauty bestie. '
+        'Namun, JIKA pengguna bertanya tentang hal DI LUAR 4 tema tersebut (seperti coding/programming, rumus matematika, fisika, politik, berita umum, sejarah non-beauty, resep masakan umum, otomotif, tugas sekolah, dll.), '
+        'kamu HARUS MENOLAK dengan ramah dan sopan bahwa kamu adalah Mirrora Assistant dan hal tersebut di luar kapasitasmu, '
+        'kemudian ajak pengguna untuk kembali membahas perawatan kecantikan, skincare, atau self-care.]\n\n'
+        'Pertanyaan Pengguna: ${userQuery.trim()}';
+
+    return sendMessage(
+      prompt: promptWithGuardrail,
+      existingHistory: existingHistory,
+    );
+  }
+
+  /// Mengirim pesan (teks atau teks + gambar) ke Edge Function `ai-chat`
   Future<String> sendMessage({
     required String prompt,
     Uint8List? imageBytes,
@@ -144,7 +310,6 @@ class AiService {
       final message = details is Map
           ? details['error']?.toString()
           : details?.toString();
-      // Kode status disertakan agar layar bisa memetakan 429 / 503
       throw Exception('${e.status} ${message ?? ''}'.trim());
     }
   }

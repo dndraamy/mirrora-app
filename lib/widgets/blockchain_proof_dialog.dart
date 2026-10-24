@@ -86,7 +86,7 @@ class BlockchainProofDialog extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Sertifikat Blockchain',
+                          'Sertifikat Pemenang Resmi',
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w800,
@@ -95,7 +95,7 @@ class BlockchainProofDialog extends StatelessWidget {
                         ),
                         SizedBox(height: 2),
                         Text(
-                          'Verifikasi Hasil Undian Anti-Manipulasi',
+                          'Verifikasi Pengundian Sah & Terdaftar',
                           style: TextStyle(
                             fontSize: 11.5,
                             color: MirroraTheme.warmGray,
@@ -137,8 +137,8 @@ class BlockchainProofDialog extends StatelessWidget {
                     Expanded(
                       child: Text(
                         (isValid && isChainValid)
-                            ? 'Rantai Blok Valid & Terkunci Permanen'
-                            : 'Peringatan: Hash Blok Tidak Cocok!',
+                            ? 'Sertifikat Digital Valid & Terverifikasi'
+                            : 'Peringatan: Kode Verifikasi Tidak Cocok!',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -181,18 +181,18 @@ class BlockchainProofDialog extends StatelessWidget {
               ),
               const SizedBox(height: 18),
 
-              // Kriptografi Hash SHA-256
-              _buildSectionTitle('Kriptografi SHA-256 (Hash Blok)'),
+              // Kode Verifikasi Digital
+              _buildSectionTitle('Kode Verifikasi Digital'),
               const SizedBox(height: 8),
               _buildHashBox(
                 context,
-                title: 'Current Block Hash (Blok #${block.index})',
+                title: 'Kode Sertifikat Resmi (ID: #${block.index})',
                 hash: block.hash,
               ),
               const SizedBox(height: 10),
               _buildHashBox(
                 context,
-                title: 'Previous Hash (Rantai Sebelumnya)',
+                title: 'Kode Pengaman Sistem',
                 hash: block.previousHash,
               ),
               const SizedBox(height: 14),
@@ -207,11 +207,11 @@ class BlockchainProofDialog extends StatelessWidget {
                 child: const Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded, size: 16, color: MirroraTheme.dustyRose),
+                    Icon(Icons.shield_outlined, size: 16, color: MirroraTheme.dustyRose),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Setiap karakter pemenang dirantai dengan algoritma SHA-256. Jika data diubah 1 huruf saja, seluruh hash rantai akan rusak dan terdeteksi curang.',
+                        'Pengundian dilakukan secara transparan dan otomatis oleh sistem Mirrora untuk menjamin keaslian serta kejujuran hasil.',
                         style: TextStyle(
                           fontSize: 11,
                           height: 1.45,
@@ -237,7 +237,7 @@ class BlockchainProofDialog extends StatelessWidget {
                     ),
                   ),
                   child: const Text(
-                    'Tutup Verifikasi',
+                    'Tutup',
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                   ),
                 ),
