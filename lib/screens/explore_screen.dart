@@ -1175,7 +1175,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       itemBuilder: (context, index) {
                         final cat = BeautyApiService.categories[index];
                         final name = cat['name']!;
-                        final icon = cat['icon']!;
                         final isSelected = _selectedCategory == name;
                         return Padding(
                           padding: const EdgeInsets.only(right: 8),
@@ -1201,20 +1200,13 @@ class _ExploreScreenState extends State<ExploreScreen> {
                                       ]
                                     : null,
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(icon, style: const TextStyle(fontSize: 14)),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    name,
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                                      color: isSelected ? MirroraTheme.white : MirroraTheme.charcoal,
-                                    ),
-                                  ),
-                                ],
+                              child: Text(
+                                name,
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                                  color: isSelected ? MirroraTheme.white : MirroraTheme.charcoal,
+                                ),
                               ),
                             ),
                           ),

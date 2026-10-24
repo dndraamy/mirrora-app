@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../models/product_model.dart';
@@ -47,10 +48,12 @@ class _FavoriteProductsScreenState extends State<FavoriteProductsScreen> {
   void _removeProduct(CatalogProduct product) {
     _favoritesService.removeFavorite(product.id);
 
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
       SnackBar(
         content: Text('${product.name} dihapus dari Favorit'),
+        duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         backgroundColor: MirroraTheme.charcoal,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -63,6 +66,13 @@ class _FavoriteProductsScreenState extends State<FavoriteProductsScreen> {
         ),
       ),
     );
+
+    // Paksa tutup tepat setelah 2 detik (menghindari delay accessibility dari sistem Android)
+    Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        messenger.hideCurrentSnackBar();
+      }
+    });
   }
 
   void _confirmClearAll() {

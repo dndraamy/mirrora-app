@@ -1698,10 +1698,10 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
                 ),
                 child: const Column(
                   children: [
-                    Text('🍃❌', style: TextStyle(fontSize: 54)),
+                    Text('❌', style: TextStyle(fontSize: 54)),
                     SizedBox(height: 8),
                     Text(
-                      'ZONK! Bunga Sakura Berguguran',
+                      'ZONK',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
