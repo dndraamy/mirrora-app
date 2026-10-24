@@ -17,7 +17,7 @@ String _kWindowStartMs(String uid) => 'shake_window_start_ms_$uid';
 String _kCountInWindow(String uid) => 'shake_count_in_window_$uid';
 
 // ─── Batas penggunaan (rate limit) ──────────────────────────────────────────
-const int _maxShakesPerWindow = 3;
+const int _maxShakesPerWindow = 10;
 const Duration _windowDuration = Duration(hours: 24);
 
 // ─── Parameter guncangan ────────────────────────────────────────────────────

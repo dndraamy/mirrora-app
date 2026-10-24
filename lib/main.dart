@@ -15,17 +15,18 @@ import 'theme/mirrora_theme.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await Supabase.initialize(
+    url: 'https://paeuxgviqbajuitsosuq.supabase.co',
+    // ignore: deprecated_member_use
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhZXV4Z3ZpcWJhanVpdHNvc3VxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5NjIyOTMsImV4cCI6MjEwNzUzODI5M30.5z0zFRD707CFXy4bCEYB5SWV0bQY5iWhejDIbsJ3U5c',
+  );
+
   await Hive.initFlutter();
   await Hive.openBox('settingsBox');
   await CurrencyService().init();
   await GiveawayService().init();
   await NotificationService().init();
   await NotificationService().requestPermissions();
-
-  await Supabase.initialize(
-    url: 'https://paeuxgviqbajuitsosuq.supabase.co',
-    publishableKey: 'sb_publishable_OcM3vYtlHeqf8zBiZc_0jQ_3XRt8GDO',
-  );
 
   runApp(const MirroraApp());
 }

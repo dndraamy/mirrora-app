@@ -425,29 +425,7 @@ class GiveawayCampaign {
       startDate: now.subtract(const Duration(days: 1)),
       endDate: now.add(const Duration(days: 7)),
       status: GiveawayStatus.closed,
-      participants: [
-        GiveawayParticipant(
-          userId: 'demo_user_01',
-          userName: 'Nadia Putri',
-          userEmail: 'nadia.putri@email.com',
-          entryTicket: '#MIR-1001',
-          registeredAt: now.subtract(const Duration(hours: 18)),
-        ),
-        GiveawayParticipant(
-          userId: 'demo_user_02',
-          userName: 'Dian Sastro',
-          userEmail: 'dian.s@email.com',
-          entryTicket: '#MIR-1002',
-          registeredAt: now.subtract(const Duration(hours: 12)),
-        ),
-        GiveawayParticipant(
-          userId: 'demo_user_03',
-          userName: 'Alya Rahma',
-          userEmail: 'alya.rahma@email.com',
-          entryTicket: '#MIR-1003',
-          registeredAt: now.subtract(const Duration(hours: 4)),
-        ),
-      ],
+      participants: [],
       winnerBlock: null,
     );
   }

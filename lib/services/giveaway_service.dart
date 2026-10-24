@@ -73,35 +73,37 @@ class GiveawayService {
     voucherCountNotifier = ValueNotifier<int>(0);
     _initialized = true;
 
-    // 3. Sinkronisasi latar belakang hemat kuota (Background Sync)
-    _syncWithSupabaseInBackground();
+    // 3. Sinkronisasi latar belakang dengan Supabase (pull peserta & status terkini)
+    unawaited(_syncFromSupabase());
   }
 
-  /// Sinkronisasi ringan dengan Supabase (free-tier friendly)
-  Future<void> _syncWithSupabaseInBackground() async {
+  /// Tarik data peserta & status kampanye terbaru dari Supabase ke lokal.
+  Future<void> _syncFromSupabase() async {
     try {
       final supabase = Supabase.instance.client;
-      // Coba fetch peserta dari Supabase jika tabel ada
-      final response = await supabase
+
+      // --- Sync peserta ---
+      final participantsRaw = await supabase
           .from('giveaway_participants')
           .select()
           .order('registered_at', ascending: true)
-          .limit(200);
+          .limit(500);
 
-      final List<dynamic> data = response as List<dynamic>;
-      if (data.isNotEmpty) {
-        final existingIds = currentCampaign.participants.map((p) => p.userId).toSet();
+      final List<dynamic> rows = participantsRaw as List<dynamic>;
+      if (rows.isNotEmpty) {
+        final existingTickets =
+            currentCampaign.participants.map((p) => p.entryTicket).toSet();
         bool hasNew = false;
 
-        for (final row in data) {
-          final uid = row['user_id'] as String? ?? '';
-          if (uid.isNotEmpty && !existingIds.contains(uid)) {
+        for (final row in rows) {
+          final ticket = row['entry_ticket'] as String? ?? '';
+          if (ticket.isNotEmpty && !existingTickets.contains(ticket)) {
             currentCampaign.participants.add(
               GiveawayParticipant(
-                userId: uid,
+                userId: row['user_id'] as String? ?? '',
                 userName: row['user_name'] as String? ?? 'Peserta',
                 userEmail: row['user_email'] as String? ?? '',
-                entryTicket: row['entry_ticket'] as String? ?? '#MIR-0000',
+                entryTicket: ticket,
                 registeredAt: row['registered_at'] != null
                     ? DateTime.parse(row['registered_at'] as String)
                     : DateTime.now(),
@@ -110,14 +112,63 @@ class GiveawayService {
             hasNew = true;
           }
         }
+        if (hasNew) await _saveCampaign(currentCampaign);
+      }
 
-        if (hasNew) {
+      // --- Sync status & pemenang dari tabel giveaway_campaigns ---
+      final campaignsRaw = await supabase
+          .from('giveaway_campaigns')
+          .select()
+          .eq('id', currentCampaign.id)
+          .maybeSingle();
+
+      if (campaignsRaw != null) {
+        final row = campaignsRaw;
+        final statusStr = row['status'] as String? ?? 'closed';
+        GiveawayStatus remoteStatus = GiveawayStatus.closed;
+        if (statusStr == 'open') remoteStatus = GiveawayStatus.open;
+        if (statusStr == 'drawn') remoteStatus = GiveawayStatus.drawn;
+
+        // Terapkan status remote jika kampanye sudah diundi (drawn)
+        if (remoteStatus == GiveawayStatus.drawn &&
+            currentCampaign.winnerBlock == null) {
+          final winnerId = row['winner_id'] as String? ?? '';
+          final winnerName = row['winner_name'] as String? ?? '';
+          final winnerTicket = row['winner_ticket'] as String? ?? '';
+          final winnerEmail = row['winner_email'] as String? ?? '';
+          final drawnAt = row['drawn_at'] != null
+              ? DateTime.parse(row['drawn_at'] as String)
+              : DateTime.now();
+
+          if (winnerId.isNotEmpty && winnerTicket.isNotEmpty) {
+            // Buat block sederhana dari data Supabase untuk ditampilkan di UI
+            final fakeBlock = BlockchainBlock(
+              index: 1,
+              timestamp: drawnAt.millisecondsSinceEpoch,
+              campaignId: currentCampaign.id,
+              winnerId: winnerId,
+              winnerName: winnerName,
+              winnerEmail: winnerEmail,
+              entryTicket: winnerTicket,
+              prize: row['prize'] as String? ?? currentCampaign.prize,
+              totalParticipants: currentCampaign.participants.length,
+              nonce: 0,
+              hash: '',
+              previousHash: '',
+            );
+            currentCampaign.winnerBlock = fakeBlock;
+            currentCampaign.status = GiveawayStatus.drawn;
+            await _box.put('giveaway_status_explicitly_set', true);
+            await _saveCampaign(currentCampaign);
+          }
+        } else if (currentCampaign.status != remoteStatus &&
+            currentCampaign.winnerBlock == null) {
+          currentCampaign.status = remoteStatus;
+          await _box.put('giveaway_status_explicitly_set', true);
           await _saveCampaign(currentCampaign);
         }
       }
     } catch (_) {
-      // Abaikan jika tabel Supabase belum ada atau rate-limit tercapai.
-      // Data lokal Hive tetap 100% berfungsi normal.
     }
   }
 
@@ -177,7 +228,9 @@ class GiveawayService {
     await _box.put('user_available_vouchers_$userId', current);
     voucherCountNotifier.value = current.length;
 
-    _trySaveParticipantToSupabase(participant);
+    _trySaveParticipantToSupabase(participant).then((err) {
+      if (err != null) debugPrint('⚠️ [submitVoucher] Supabase error: $err');
+    });
     return participant;
   }
 
@@ -256,14 +309,18 @@ class GiveawayService {
     campaign.participants.add(participant);
     await _saveCampaign(campaign);
 
-    _trySaveParticipantToSupabase(participant);
+    _trySaveParticipantToSupabase(participant).then((err) {
+      if (err != null) debugPrint('⚠️ [registerParticipant] Supabase error: $err');
+    });
 
     return participant;
   }
 
-  Future<void> _trySaveParticipantToSupabase(GiveawayParticipant p) async {
+  /// Simpan peserta ke Supabase. Return error message jika gagal, null jika sukses.
+  Future<String?> _trySaveParticipantToSupabase(GiveawayParticipant p) async {
     try {
       final supabase = Supabase.instance.client;
+      debugPrint('📤 [Supabase] Menyimpan peserta: ${p.userName} | ticket: ${p.entryTicket} | userId: ${p.userId}');
       await supabase.from('giveaway_participants').insert({
         'user_id': p.userId,
         'user_name': p.userName,
@@ -271,8 +328,11 @@ class GiveawayService {
         'entry_ticket': p.entryTicket,
         'registered_at': p.registeredAt.toIso8601String(),
       });
-    } catch (_) {
-      // Abaikan jika Supabase offline atau belum ada tabel
+      debugPrint('✅ [Supabase] Berhasil simpan peserta: ${p.userName}');
+      return null; // sukses
+    } catch (e) {
+      debugPrint('❌ [Supabase] GAGAL simpan peserta: $e');
+      return e.toString(); // kembalikan error
     }
   }
 
@@ -314,6 +374,9 @@ class GiveawayService {
     campaign.status = GiveawayStatus.drawn;
     await _saveCampaign(campaign);
 
+    // 5. Simpan hasil undian ke Supabase (tabel giveaway_campaigns)
+    unawaited(_upsertCampaignToSupabase(campaign));
+
     return newBlock;
   }
 
@@ -322,6 +385,8 @@ class GiveawayService {
     final campaign = currentCampaign;
     campaign.winnerClaimData = data;
     await _saveCampaign(campaign);
+    // Simpan data klaim ke Supabase
+    unawaited(_upsertCampaignToSupabase(campaign));
   }
 
   /// Update pengaturan kampanye oleh Admin (Tanggal, Status, Hadiah, Judul)
@@ -346,6 +411,39 @@ class GiveawayService {
     if (description != null) campaign.description = description.trim();
 
     await _saveCampaign(campaign);
+    // Sync perubahan status ke Supabase
+    unawaited(_upsertCampaignToSupabase(campaign));
+  }
+
+  /// Simpan / perbarui data kampanye (status, pemenang, klaim) ke tabel giveaway_campaigns Supabase
+  Future<void> _upsertCampaignToSupabase(GiveawayCampaign campaign) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final block = campaign.winnerBlock;
+      final claim = campaign.winnerClaimData;
+
+      await supabase.from('giveaway_campaigns').upsert({
+        'id': campaign.id,
+        'title': campaign.title,
+        'prize': campaign.prize,
+        'status': campaign.status.name,
+        'winner_id': block?.winnerId,
+        'winner_name': block?.winnerName,
+        'winner_ticket': block?.entryTicket,
+        'winner_email': block?.winnerEmail,
+        'drawn_at': block != null
+            ? DateTime.fromMillisecondsSinceEpoch(block.timestamp).toIso8601String()
+            : null,
+        'winner_claim_name': claim?.fullName,
+        'winner_claim_phone': claim?.phoneNumber,
+        'winner_claim_address': claim?.shippingAddress,
+        'winner_claim_notes': claim?.notes,
+        'winner_claimed_at': claim?.claimedAt.toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'id');
+    } catch (_) {
+      // Abaikan jika Supabase offline
+    }
   }
 
   /// Mengecek apakah user saat ini adalah pemenang undian
@@ -376,29 +474,7 @@ class GiveawayService {
       startDate: now.subtract(const Duration(days: 1)),
       endDate: now.add(const Duration(days: 7)),
       status: GiveawayStatus.closed,
-      participants: [
-        GiveawayParticipant(
-          userId: 'demo_user_01',
-          userName: 'Nadia Putri',
-          userEmail: 'nadia.putri@email.com',
-          entryTicket: '#MIR-1001',
-          registeredAt: now.subtract(const Duration(hours: 18)),
-        ),
-        GiveawayParticipant(
-          userId: 'demo_user_02',
-          userName: 'Dian Sastro',
-          userEmail: 'dian.s@email.com',
-          entryTicket: '#MIR-1002',
-          registeredAt: now.subtract(const Duration(hours: 12)),
-        ),
-        GiveawayParticipant(
-          userId: 'demo_user_03',
-          userName: 'Alya Rahma',
-          userEmail: 'alya.rahma@email.com',
-          entryTicket: '#MIR-1003',
-          registeredAt: now.subtract(const Duration(hours: 4)),
-        ),
-      ],
+      participants: [],
       winnerBlock: null,
     );
 
@@ -408,6 +484,16 @@ class GiveawayService {
 
     await _saveCampaign(newCampaign);
     await _box.put('giveaway_status_explicitly_set', false);
+
+    // Bersihkan data di Supabase juga agar sinkron
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('giveaway_participants').delete().neq('id', 0);
+      await supabase.from('giveaway_campaigns').delete().neq('id', '');
+      debugPrint('✅ Data Supabase berhasil di-reset');
+    } catch (e) {
+      debugPrint('⚠️ Gagal reset data Supabase: $e');
+    }
   }
 
   Future<void> _saveCampaign(GiveawayCampaign campaign) async {
