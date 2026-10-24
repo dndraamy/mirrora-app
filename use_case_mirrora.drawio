@@ -1,0 +1,87 @@
+<mxfile host="app.diagrams.net" modified="2026-10-23T03:40:00.000Z" agent="Mozilla/5.0" version="24.0.0">
+  <diagram id="mirrora_usecase" name="Use Case Diagram Mirrora">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="#ffffff" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- System Boundary Box -->
+        <mxCell id="box" value="«mobile app»&#xa;Mirrora App" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=15;spacingTop=10;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="260" y="50" width="600" height="700" as="geometry" />
+        </mxCell>
+
+        <!-- Stickman Actor: User -->
+        <mxCell id="actor_user" value="User&#xa;(Pengguna)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;strokeWidth=2;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="340" width="50" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- Use Cases -->
+        <mxCell id="uc1" value="Auth&#xa;(Login, Register &amp; Biometrik)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="380" y="90" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc2" value="Konsultasi AI Skincare&#xa;(Teks &amp; Unggah Foto Kulit)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="420" y="165" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc3" value="Mengelola Rutinitas Harian&#xa;(Checklist Skincare &amp; Notifikasi)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="370" y="245" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc4" value="Melihat &amp; Memfilter&#xa;Katalog Produk Kosmetik" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="430" y="325" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc5" value="Mencari Toko Terdekat&#xa;(LBS / GPS &amp; OpenStreetMap)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="370" y="405" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc6" value="Memainkan Minigame Sensor&#xa;(Shake to Pick &amp; Bubble Pop)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="430" y="485" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc7" value="Mengikuti Undian Giveaway&#xa;&amp; Cek Bukti Blockchain" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="370" y="565" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="uc8" value="Mengelola Profil &amp; Pengaturan" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=1.8;fontSize=11;fontStyle=0;" vertex="1" parent="1">
+          <mxGeometry x="420" y="645" width="280" height="55" as="geometry" />
+        </mxCell>
+
+        <!-- Straight Connector Lines from Actor to Use Cases (with arrow like Image 1) -->
+        <mxCell id="edge1" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge2" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge3" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge4" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge5" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc5">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge6" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge7" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc7">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge8" style="endArrow=classic;html=1;rounded=0;strokeColor=#000000;strokeWidth=1.6;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="actor_user" target="uc8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
