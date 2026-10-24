@@ -87,14 +87,10 @@ class _MirroraAssistantScreenState extends State<MirroraAssistantScreen> {
       AiChatMessage(
         id: 'welcome',
         text:
-            'Hai, ${widget.userName}! ✨\n\n'
-            'Aku Mirrora Assistant, asisten kecantikan, skincare, self-care, dan makeup pribadimu dalam aplikasi Mirrora.\n\n'
-            'Kamu bisa berkonsultasi seputar:\n'
-            '• 🌸 Urutan & rekomendasi rutinitas skincare\n'
-            '• 💄 Tips makeup, aplikasi kosmetik, dan pemilihan warna\n'
-            '• 💧 Mengatasi masalah kulit (jerawat, kusam, flek, skin barrier)\n'
-            '• 🌿 Tips self-care untuk relaksasi dan kesehatan kulit holistik\n\n'
-            'Catatan: Aku hanya memiliki keahlian seputar 4 topik di atas ya! Ada yang ingin kamu tanyakan hari ini? 💕',
+            'Hai, ${widget.userName}!\n\n'
+            'Aku Mirrora Assistant, .\n\n'
+            'Kamu bisa berkonsultasi seputar skincare, makeup, self-care, dan tips-tips lainnya denganku\n\n'
+            'Ada yang ingin kamu tanyakan hari ini?',
         isUser: false,
         timestamp: DateTime.now(),
       ),
@@ -236,26 +232,13 @@ class _MirroraAssistantScreenState extends State<MirroraAssistantScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Mirrora Assistant',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: MirroraTheme.charcoal,
-                  ),
-                ),
-                Text(
-                  'Beauty, Skincare & Self-Care LLM',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w500,
-                    color: MirroraTheme.warmGray,
-                  ),
-                ),
-              ],
+            const Text(
+              'Mirrora Assistant',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: MirroraTheme.charcoal,
+              ),
             ),
           ],
         ),

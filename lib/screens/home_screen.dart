@@ -861,7 +861,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Expanded(
           child: _QuickAccessCard(
             icon: Icons.camera_alt_rounded,
-            label: 'AI',
+            label: 'Mirrora AI',
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(

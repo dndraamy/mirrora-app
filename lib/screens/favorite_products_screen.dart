@@ -51,6 +51,7 @@ class _FavoriteProductsScreenState extends State<FavoriteProductsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${product.name} dihapus dari Favorit'),
+        duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
         backgroundColor: MirroraTheme.charcoal,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

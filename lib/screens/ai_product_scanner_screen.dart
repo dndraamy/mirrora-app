@@ -310,26 +310,13 @@ class _AiProductScannerScreenState extends State<AiProductScannerScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AI',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: MirroraTheme.charcoal,
-                  ),
-                ),
-                Text(
-                  'Product Scanner & Detail Finder',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: MirroraTheme.warmGray,
-                  ),
-                ),
-              ],
+            const Text(
+              'Mirrora AI',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: MirroraTheme.charcoal,
+              ),
             ),
           ],
         ),
