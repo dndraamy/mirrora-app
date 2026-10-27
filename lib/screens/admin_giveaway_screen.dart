@@ -322,9 +322,9 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsB
           borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: MirroraTheme.blushPink),
         ),
-        title: const Text('Mulai Ulang Periode Undian?'),
+        title: const Text('Mulai Periode Undian Baru?'),
         content: const Text(
-          'Seluruh status dan data pemenang undian saat ini akan dibersihkan untuk memulai periode undian baru.',
+          'Periode undian baru akan dibuka untuk menerima peserta baru. Seluruh riwayat pemenang sebelumnya dan sertifikat blockchain tetap tersimpan aman.',
           style: TextStyle(fontSize: 12.5, color: MirroraTheme.warmGray),
         ),
         actions: [
@@ -335,24 +335,24 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsB
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent,
+              backgroundColor: MirroraTheme.dustyRose,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: const Text('Ya, Mulai Ulang'),
+            child: const Text('Ya, Buka Periode Baru'),
           ),
         ],
       ),
     );
 
     if (confirmed == true) {
-      await _service.resetCampaignForTesting();
+      await _service.startNewCampaignPeriod();
       final c = _service.currentCampaign;
       _titleController.text = c.title;
       _prizeController.text = c.prize;
       setState(() {});
-      _showMessage('Periode undian berhasil dimulai ulang!');
+      _showMessage('Periode undian baru berhasil dibuka!');
     }
   }
 
@@ -988,14 +988,15 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsB
                         const SizedBox(height: 14),
                         SizedBox(
                           width: double.infinity,
-                          child: OutlinedButton(
+                          child: OutlinedButton.icon(
                             onPressed: _resetCampaign,
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.redAccent,
-                              side: const BorderSide(color: Colors.redAccent),
+                              foregroundColor: MirroraTheme.dustyRose,
+                              side: const BorderSide(color: MirroraTheme.dustyRose),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: const Text('Mulai Ulang Periode Undian', style: TextStyle(fontWeight: FontWeight.w700)),
+                            label: const Text('Mulai Periode Undian Baru', style: TextStyle(fontWeight: FontWeight.w700)),
                           ),
                         ),
                       ],

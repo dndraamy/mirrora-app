@@ -82,10 +82,11 @@ class GiveawayService {
     try {
       final supabase = Supabase.instance.client;
 
-      // --- Sync peserta ---
+      // --- Sync peserta (hanya peserta periode aktif saat ini) ---
       final participantsRaw = await supabase
           .from('giveaway_participants')
           .select()
+          .gte('registered_at', currentCampaign.startDate.toIso8601String())
           .order('registered_at', ascending: true)
           .limit(500);
 
@@ -577,39 +578,71 @@ class GiveawayService {
     return matchUid || matchEmail || matchName;
   }
 
-  /// Reset undian untuk kebutuhan testing ulang oleh Owner/Admin
-  Future<void> resetCampaignForTesting() async {
+  /// Memulai periode undian baru (Soft Reset - menjaga riwayat Blockchain & Supabase tanpa boros kuota)
+  Future<void> startNewCampaignPeriod({
+    String? newTitle,
+    String? newPrize,
+    Duration duration = const Duration(days: 7),
+  }) async {
     final now = DateTime.now();
+    final oldCampaign = currentCampaign;
+
+    // 1. Jika periode sebelumnya sudah diundi, arsipkan riwayat pemenang ke Supabase
+    if (oldCampaign.winnerBlock != null) {
+      try {
+        final supabase = Supabase.instance.client;
+        final archiveId = '${oldCampaign.id}_history_${oldCampaign.winnerBlock!.timestamp}';
+        await supabase.from('giveaway_campaigns').upsert({
+          'id': archiveId,
+          'title': oldCampaign.title,
+          'prize': oldCampaign.prize,
+          'status': 'drawn',
+          'winner_id': oldCampaign.winnerBlock?.winnerId,
+          'winner_name': oldCampaign.winnerBlock?.winnerName,
+          'winner_ticket': oldCampaign.winnerBlock?.entryTicket,
+          'winner_email': oldCampaign.winnerBlock?.winnerEmail,
+          'winner_block': oldCampaign.winnerBlock?.toJson(),
+          'drawn_at': DateTime.fromMillisecondsSinceEpoch(oldCampaign.winnerBlock!.timestamp).toIso8601String(),
+          'winner_claim_name': oldCampaign.winnerClaimData?.fullName,
+          'winner_claim_phone': oldCampaign.winnerClaimData?.phoneNumber,
+          'winner_claim_address': oldCampaign.winnerClaimData?.shippingAddress,
+          'winner_claim_notes': oldCampaign.winnerClaimData?.notes,
+          'winner_claimed_at': oldCampaign.winnerClaimData?.claimedAt.toIso8601String(),
+          'updated_at': now.toIso8601String(),
+        }, onConflict: 'id');
+        debugPrint('📜 [Supabase] Riwayat periode lama berhasil diarsipkan: $archiveId');
+      } catch (e) {
+        debugPrint('⚠️ Gagal arsipkan riwayat lama ke Supabase: $e');
+      }
+    }
+
+    // 2. Buat kampanye periode baru yang bersih (status Open, kosongkan peserta aktif)
     final newCampaign = GiveawayCampaign(
-      id: 'mirrora_2nd_anniversary',
-      title: '🎉 Mirrora 2nd Anniversary Giveaway!',
-      prize: '1 Set Skincare COSRX!',
-      description:
-          'Rayakan 2 tahun perjalanan self-care bersama kami! Dapatkan kesempatan memenangkan 1 Set Skincare COSRX original gratis.',
-      startDate: now.subtract(const Duration(days: 1)),
-      endDate: now.add(const Duration(days: 7)),
-      status: GiveawayStatus.closed,
+      id: oldCampaign.id,
+      title: newTitle ?? oldCampaign.title,
+      prize: newPrize ?? oldCampaign.prize,
+      description: oldCampaign.description,
+      startDate: now,
+      endDate: now.add(duration),
+      status: GiveawayStatus.open,
       participants: [],
       winnerBlock: null,
+      winnerClaimData: null,
     );
 
-    // Reset blockchain ke genesis
-    _blockchain = SimpleBlockchain();
-    await _box.put(_blockchainKey, _blockchain.toJsonList());
+    // 3. PENTING: Blockchain TIDAK DI-RESET!
+    // Catatan blok pemenang periode sebelumnya tetap abadi di rantai lokal.
 
     await _saveCampaign(newCampaign);
-    await _box.put('giveaway_status_explicitly_set', false);
+    await _box.put('giveaway_status_explicitly_set', true);
 
-    // Bersihkan data di Supabase juga agar sinkron
-    try {
-      final supabase = Supabase.instance.client;
-      await supabase.from('giveaway_participants').delete().neq('id', 0);
-      await supabase.from('giveaway_campaigns').delete().neq('id', '');
-      debugPrint('✅ Data Supabase berhasil di-reset');
-    } catch (e) {
-      debugPrint('⚠️ Gagal reset data Supabase: $e');
-    }
+    // 4. Perbarui baris aktif di Supabase ke status periode baru yang siap menerima peserta
+    await _upsertCampaignToSupabase(newCampaign);
+    debugPrint('🎉 Periode undian baru berhasil dibuka tanpa menghapus riwayat lama!');
   }
+
+  /// Alias kompatibilitas
+  Future<void> resetCampaignForTesting() => startNewCampaignPeriod();
 
   Future<void> _saveCampaign(GiveawayCampaign campaign) async {
     await _box.put(_campaignKey, campaign.toJson());

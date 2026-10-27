@@ -10,28 +10,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/giveaway_service.dart';
 import '../theme/mirrora_theme.dart';
 
-// ─── Kunci Hive (per pengguna, diberi awalan user ID) ───────────────────────
+// --- Kunci Hive (per pengguna, diberi awalan user ID) -----------------------
 // Dibuat dalam bentuk fungsi supaya setiap akun punya slot batas shake
 // sendiri-sendiri, walaupun dipakai di perangkat yang sama.
 String _kWindowStartMs(String uid) => 'shake_window_start_ms_$uid';
 String _kCountInWindow(String uid) => 'shake_count_in_window_$uid';
 
-// ─── Batas penggunaan (rate limit) ──────────────────────────────────────────
+// --- Batas penggunaan (rate limit) ------------------------------------------
 const int _maxShakesPerWindow = 5;
 const Duration _windowDuration = Duration(hours: 24);
 
-// ─── Parameter guncangan ────────────────────────────────────────────────────
+// --- Parameter guncangan ----------------------------------------------------
 const double _shakeThreshold =
-    12.0; // percepatan minimum (m/s²) agar dianggap guncangan
+    12.0; // percepatan minimum (m/s�) agar dianggap guncangan
 const double _energyPerShake =
     0.25; // energi yang bertambah per guncangan (butuh sekitar 5 guncangan)
 const double _energyDecayRate =
     0.09; // energi yang berkurang per detik jika tidak digoyang
 
-// ─── Peluang dapat tiket undian (gacha berimbang: ~48% dapat tiket, ~52% zonk) ───
+// --- Peluang dapat tiket undian (gacha berimbang: ~48% dapat tiket, ~52% zonk) ---
 const double _ticketWinRate = 0.48;
 
-// ─── Warna kelopak bunga ────────────────────────────────────────────────────
+// --- Warna kelopak bunga ----------------------------------------------------
 const _petalColors = [
   Color(0xFFFFD6E0),
   Color(0xFFF8B8CC),
@@ -593,7 +593,6 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
         event.x * event.x + event.y * event.y + event.z * event.z,
       );
 
-      // Pohon ikut bergoyang bahkan pada guncangan sedang (ambang 7.0 → responsif)
       if (magnitude > 7.0) {
         _applyShakeImpulse(event.x);
       }
@@ -674,6 +673,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
       final user = Supabase.instance.client.auth.currentUser;
       final email = user?.email ?? 'user@mirrora.app';
       final name =
+          user?.userMetadata?['username'] as String? ??
           user?.userMetadata?['name'] as String? ??
           user?.userMetadata?['full_name'] as String? ??
           (email.contains('@') ? email.split('@')[0] : 'Peserta');
@@ -851,14 +851,12 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // Simpan ukuran kanvas yang sebenarnya agar _spawnPetal memakai koordinat yang tepat
               _treeCanvasSize = Size(
                 constraints.maxWidth,
                 constraints.maxHeight,
               );
               return Stack(
                 children: [
-                  // Latar gradasi lembut: pink → blush → krem
                   Positioned.fill(
                     child: Container(
                       decoration: const BoxDecoration(
@@ -1336,14 +1334,14 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
   }
 
   // Alternatif jika device tidak bisa digoyang: tiap ketukan menambah sedikit energi
-  // (~0.05 per ketukan → butuh sekitar 20 ketukan)
+  // (~0.05 per ketukan ? butuh sekitar 20 ketukan)
   void _onTap() {
     _shakeEnergy = (_shakeEnergy + 0.05).clamp(0.0, 1.0);
     _treeAngVelocity += (_rng.nextDouble() - 0.5) * 0.5;
     if (_shakeEnergy >= 1.0) _triggerResult();
   }
 
-  // ─── TAMPILAN HASIL ───────────────────────────────────────────────────────
+  // --- TAMPILAN HASIL -------------------------------------------------------
   Widget _buildResultView() {
     return Stack(
       children: [
@@ -1470,7 +1468,7 @@ class _ShakeToPickScreenState extends State<ShakeToPickScreen>
               ],
             ),
             child: const Text(
-              '🎉 HORE! DAPAT TIKET UNDIAN!',
+              '🎉 YAYY! DAPAT TIKET UNDIAN!',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
