@@ -255,6 +255,9 @@ class SimpleBlockchain {
 
   /// Memverifikasi seluruh rantai: menjamin data tidak pernah diubah
   bool verifyIntegrity() {
+    if (_chain.isEmpty) return false;
+    if (!_chain.first.isValid()) return false;
+
     for (int i = 1; i < _chain.length; i++) {
       final current = _chain[i];
       final previous = _chain[i - 1];

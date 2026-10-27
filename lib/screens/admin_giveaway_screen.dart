@@ -36,6 +36,11 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsB
     final c = _service.currentCampaign;
     _titleController = TextEditingController(text: c.title);
     _prizeController = TextEditingController(text: c.prize);
+
+    // Otomatis sinkronkan data lokal ke Supabase jika ada peserta/hasil undian lokal
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _service.syncLocalToSupabase();
+    });
   }
 
   @override
@@ -474,7 +479,22 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsB
           ),
         ),
         actions: [
-          if (!_isSessionLocked)
+          if (!_isSessionLocked) ...[
+            IconButton(
+              icon: const Icon(Icons.cloud_upload_outlined, color: MirroraTheme.dustyRose, size: 22),
+              tooltip: 'Unggah Data ke Supabase',
+              onPressed: () async {
+                _showMessage('Mengunggah data peserta & undian ke Supabase...');
+                try {
+                  final synced = await _service.syncLocalToSupabase();
+                  if (mounted) {
+                    _showMessage('✅ Berhasil menyinkronkan $synced peserta & data undian ke Supabase!');
+                  }
+                } catch (e) {
+                  if (mounted) _showMessage('Gagal sinkron: $e');
+                }
+              },
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: IconButton(
@@ -489,6 +509,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsB
                 },
               ),
             ),
+          ],
         ],
       ),
       body: SafeArea(

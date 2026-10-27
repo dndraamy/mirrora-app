@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -130,8 +130,11 @@ class GiveawayService {
         if (statusStr == 'drawn') remoteStatus = GiveawayStatus.drawn;
 
         // Terapkan status remote jika kampanye sudah diundi (drawn)
-        if (remoteStatus == GiveawayStatus.drawn &&
-            currentCampaign.winnerBlock == null) {
+        // Periksa jika winnerBlock belum ada atau sebelumnya berupa fakeBlock (tidak valid)
+        final needsWinnerBlock = remoteStatus == GiveawayStatus.drawn &&
+            (currentCampaign.winnerBlock == null || !currentCampaign.winnerBlock!.isValid());
+
+        if (needsWinnerBlock) {
           final winnerId = row['winner_id'] as String? ?? '';
           final winnerName = row['winner_name'] as String? ?? '';
           final winnerTicket = row['winner_ticket'] as String? ?? '';
@@ -140,9 +143,21 @@ class GiveawayService {
               ? DateTime.parse(row['drawn_at'] as String)
               : DateTime.now();
 
-          if (winnerId.isNotEmpty && winnerTicket.isNotEmpty) {
-            // Buat block sederhana dari data Supabase untuk ditampilkan di UI
-            final fakeBlock = BlockchainBlock(
+          BlockchainBlock? winnerBlock;
+
+          // 1. Prioritaskan memuat winner_block JSONB lengkap dari Supabase
+          if (row['winner_block'] != null) {
+            try {
+              final blockJson = Map<String, dynamic>.from(row['winner_block'] as Map);
+              winnerBlock = BlockchainBlock.fromJson(blockJson);
+            } catch (e) {
+              debugPrint('⚠️ Error parsing winner_block dari Supabase: $e');
+            }
+          }
+
+          // 2. Fallback jika Supabase belum memiliki kolom winner_block
+          if (winnerBlock == null && winnerId.isNotEmpty && winnerTicket.isNotEmpty) {
+            winnerBlock = BlockchainBlock(
               index: 1,
               timestamp: drawnAt.millisecondsSinceEpoch,
               campaignId: currentCampaign.id,
@@ -156,8 +171,36 @@ class GiveawayService {
               hash: '',
               previousHash: '',
             );
-            currentCampaign.winnerBlock = fakeBlock;
+          }
+
+          if (winnerBlock != null) {
+            currentCampaign.winnerBlock = winnerBlock;
             currentCampaign.status = GiveawayStatus.drawn;
+
+            // Jika blok valid dan belum ada di rantai lokal, masukkan ke rantai lokal
+            if (winnerBlock.isValid()) {
+              final alreadyInChain = _blockchain.chain.any((b) => b.hash == winnerBlock!.hash);
+              if (!alreadyInChain) {
+                _blockchain = SimpleBlockchain(chain: [..._blockchain.chain, winnerBlock]);
+                await _box.put(_blockchainKey, _blockchain.toJsonList());
+              }
+            }
+
+            // Sinkronkan data klaim jika sudah ada di Supabase
+            if (row['winner_claim_name'] != null &&
+                row['winner_claim_name'].toString().isNotEmpty) {
+              currentCampaign.winnerClaimData = WinnerClaimData(
+                winnerId: winnerBlock.winnerId,
+                fullName: row['winner_claim_name'] as String? ?? '',
+                phoneNumber: row['winner_claim_phone'] as String? ?? '',
+                shippingAddress: row['winner_claim_address'] as String? ?? '',
+                notes: row['winner_claim_notes'] as String? ?? '',
+                claimedAt: row['winner_claimed_at'] != null
+                    ? DateTime.parse(row['winner_claimed_at'] as String)
+                    : DateTime.now(),
+              );
+            }
+
             await _box.put('giveaway_status_explicitly_set', true);
             await _saveCampaign(currentCampaign);
           }
@@ -349,6 +392,20 @@ class GiveawayService {
     }
   }
 
+  /// Sinkronkan seluruh data peserta lokal dan data kampanye saat ini ke Supabase
+  Future<int> syncLocalToSupabase() async {
+    final campaign = currentCampaign;
+    int syncedCount = 0;
+
+    for (final p in campaign.participants) {
+      final err = await _trySaveParticipantToSupabase(p);
+      if (err == null) syncedCount++;
+    }
+
+    await _upsertCampaignToSupabase(campaign);
+    return syncedCount;
+  }
+
   /// Pengundian Otomatis menggunakan Algoritma Acak Kriptografis (Random.secure)
   /// dan Mengunci Hasil ke dalam Blockchain Lokal.
   Future<BlockchainBlock> drawWinner() async {
@@ -387,8 +444,13 @@ class GiveawayService {
     campaign.status = GiveawayStatus.drawn;
     await _saveCampaign(campaign);
 
-    // 5. Simpan hasil undian ke Supabase (tabel giveaway_campaigns)
-    unawaited(_upsertCampaignToSupabase(campaign));
+    // 5. Pastikan semua peserta undian lokal juga terunggah ke Supabase
+    for (final p in campaign.participants) {
+      await _trySaveParticipantToSupabase(p);
+    }
+
+    // 6. Simpan hasil undian ke Supabase (tabel giveaway_campaigns)
+    await _upsertCampaignToSupabase(campaign);
 
     return newBlock;
   }
@@ -435,7 +497,9 @@ class GiveawayService {
       final block = campaign.winnerBlock;
       final claim = campaign.winnerClaimData;
 
-      await supabase.from('giveaway_campaigns').upsert({
+      debugPrint('📤 [Supabase] Upsert campaign: id=${campaign.id}, status=${campaign.status.name}, winner=${block?.winnerName}');
+
+      final Map<String, dynamic> data = {
         'id': campaign.id,
         'title': campaign.title,
         'prize': campaign.prize,
@@ -453,9 +517,47 @@ class GiveawayService {
         'winner_claim_notes': claim?.notes,
         'winner_claimed_at': claim?.claimedAt.toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'id');
-    } catch (_) {
-      // Abaikan jika Supabase offline
+      };
+
+      if (block != null) {
+        data['winner_block'] = block.toJson();
+      }
+
+      await supabase.from('giveaway_campaigns').upsert(data, onConflict: 'id');
+      debugPrint('✅ [Supabase] Berhasil simpan hasil undian ke giveaway_campaigns!');
+    } catch (e) {
+      debugPrint('❌ [Supabase] GAGAL upsert giveaway_campaigns: $e');
+
+      // Jika gagal karena kolom winner_block belum dibuat di Supabase, coba simpan kolom dasar
+      if (e.toString().contains('winner_block')) {
+        try {
+          final supabase = Supabase.instance.client;
+          final block = campaign.winnerBlock;
+          final claim = campaign.winnerClaimData;
+          await supabase.from('giveaway_campaigns').upsert({
+            'id': campaign.id,
+            'title': campaign.title,
+            'prize': campaign.prize,
+            'status': campaign.status.name,
+            'winner_id': block?.winnerId,
+            'winner_name': block?.winnerName,
+            'winner_ticket': block?.entryTicket,
+            'winner_email': block?.winnerEmail,
+            'drawn_at': block != null
+                ? DateTime.fromMillisecondsSinceEpoch(block.timestamp).toIso8601String()
+                : null,
+            'winner_claim_name': claim?.fullName,
+            'winner_claim_phone': claim?.phoneNumber,
+            'winner_claim_address': claim?.shippingAddress,
+            'winner_claim_notes': claim?.notes,
+            'winner_claimed_at': claim?.claimedAt.toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          }, onConflict: 'id');
+          debugPrint('⚠️ [Supabase] Berhasil simpan hasil undian (fallback tanpa kolom winner_block)');
+        } catch (inner) {
+          debugPrint('❌ [Supabase] Fallback juga gagal: $inner');
+        }
+      }
     }
   }
 
