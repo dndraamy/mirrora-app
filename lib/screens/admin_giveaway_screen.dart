@@ -488,7 +488,7 @@ class _AdminGiveawayScreenState extends State<AdminGiveawayScreen> with WidgetsB
                 try {
                   final synced = await _service.syncLocalToSupabase();
                   if (mounted) {
-                    _showMessage('✅ Berhasil menyinkronkan $synced peserta & data undian ke Supabase!');
+                    _showMessage('✅ Berhasil menyinkronkan $synced peserta, undian, & rantai blockchain ke Supabase!');
                   }
                 } catch (e) {
                   if (mounted) _showMessage('Gagal sinkron: $e');

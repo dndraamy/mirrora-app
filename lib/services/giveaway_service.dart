@@ -73,8 +73,9 @@ class GiveawayService {
     voucherCountNotifier = ValueNotifier<int>(0);
     _initialized = true;
 
-    // 3. Sinkronisasi latar belakang dengan Supabase (pull peserta & status terkini)
+    // 3. Sinkronisasi latar belakang dengan Supabase (pull peserta, status terkini, & rantai blockchain)
     unawaited(_syncFromSupabase());
+    unawaited(_syncBlockchainFromSupabase());
   }
 
   /// Tarik data peserta & status kampanye terbaru dari Supabase ke lokal.
@@ -213,6 +214,83 @@ class GiveawayService {
         }
       }
     } catch (_) {
+    }
+  }
+
+  /// Tarik seluruh rantai blockchain dari tabel giveaway_blocks di Supabase untuk transparansi & audit publik
+  Future<void> _syncBlockchainFromSupabase() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final res = await supabase
+          .from('giveaway_blocks')
+          .select()
+          .order('block_index', ascending: true);
+
+      final rows = res as List<dynamic>;
+      if (rows.isNotEmpty) {
+        final blocks = rows.map((r) => BlockchainBlock(
+          index: r['block_index'] as int? ?? 0,
+          timestamp: (r['timestamp'] is int)
+              ? r['timestamp'] as int
+              : int.tryParse(r['timestamp'].toString()) ?? 0,
+          campaignId: r['campaign_id'] as String? ?? '',
+          winnerId: r['winner_id'] as String? ?? '',
+          winnerName: r['winner_name'] as String? ?? '',
+          winnerEmail: r['winner_email'] as String? ?? '',
+          entryTicket: r['entry_ticket'] as String? ?? '',
+          prize: r['prize'] as String? ?? '',
+          totalParticipants: r['total_participants'] as int? ?? 0,
+          nonce: r['nonce'] as int? ?? 0,
+          previousHash: r['previous_hash'] as String? ?? '',
+          hash: r['hash'] as String? ?? '',
+        )).toList();
+
+        // Validasi integritas rantai dari Supabase
+        final remoteChain = SimpleBlockchain(chain: blocks);
+        if (remoteChain.verifyIntegrity()) {
+          _blockchain = remoteChain;
+          await _box.put(_blockchainKey, _blockchain.toJsonList());
+          debugPrint('⛓️ [Blockchain] Sinkron ${_blockchain.chain.length} blok valid dari Supabase giveaway_blocks!');
+        } else {
+          debugPrint('⚠️ [Blockchain] Rantai dari Supabase tidak lolos verifikasi integritas hash!');
+        }
+      } else {
+        // Jika tabel giveaway_blocks masih kosong di Supabase, unggah rantai lokal awal (Genesis dsb)
+        await _uploadBlockchainToSupabase();
+      }
+    } catch (e) {
+      debugPrint('ℹ️ [Blockchain] Info sync giveaway_blocks Supabase: $e');
+    }
+  }
+
+  /// Simpan / perbarui satu blok ke tabel giveaway_blocks di Supabase
+  Future<void> _saveBlockToSupabase(BlockchainBlock block) async {
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('giveaway_blocks').upsert({
+        'block_index': block.index,
+        'timestamp': block.timestamp,
+        'campaign_id': block.campaignId,
+        'winner_id': block.winnerId,
+        'winner_name': block.winnerName,
+        'winner_email': block.winnerEmail,
+        'entry_ticket': block.entryTicket,
+        'prize': block.prize,
+        'total_participants': block.totalParticipants,
+        'nonce': block.nonce,
+        'previous_hash': block.previousHash,
+        'hash': block.hash,
+      }, onConflict: 'block_index');
+      debugPrint('⛓️ [Blockchain] Blok #${block.index} (${block.hash.substring(0, 10)}...) tersimpan ke Supabase');
+    } catch (e) {
+      debugPrint('⚠️ [Blockchain] Gagal simpan blok #${block.index} ke Supabase: $e');
+    }
+  }
+
+  /// Unggah seluruh rantai blockchain lokal saat ini ke tabel giveaway_blocks di Supabase
+  Future<void> _uploadBlockchainToSupabase() async {
+    for (final block in _blockchain.chain) {
+      await _saveBlockToSupabase(block);
     }
   }
 
@@ -393,7 +471,7 @@ class GiveawayService {
     }
   }
 
-  /// Sinkronkan seluruh data peserta lokal dan data kampanye saat ini ke Supabase
+  /// Sinkronkan seluruh data peserta lokal, rantai blockchain, dan data kampanye saat ini ke Supabase
   Future<int> syncLocalToSupabase() async {
     final campaign = currentCampaign;
     int syncedCount = 0;
@@ -403,12 +481,15 @@ class GiveawayService {
       if (err == null) syncedCount++;
     }
 
+    // Unggah seluruh rantai blockchain ke Supabase (tabel giveaway_blocks)
+    await _uploadBlockchainToSupabase();
+
     await _upsertCampaignToSupabase(campaign);
     return syncedCount;
   }
 
   /// Pengundian Otomatis menggunakan Algoritma Acak Kriptografis (Random.secure)
-  /// dan Mengunci Hasil ke dalam Blockchain Lokal.
+  /// dan Mengunci Hasil ke dalam Blockchain Lokal & Supabase.
   Future<BlockchainBlock> drawWinner() async {
     final campaign = currentCampaign;
 
@@ -436,8 +517,9 @@ class GiveawayService {
       nonce: nonce,
     );
 
-    // 3. Simpan blockchain
+    // 3. Simpan blockchain secara lokal dan ke Supabase giveaway_blocks
     await _box.put(_blockchainKey, _blockchain.toJsonList());
+    await _saveBlockToSupabase(newBlock);
 
     // 4. Perbarui status kampanye menjadi DRAWN dan reset data klaim pemenang baru
     campaign.winnerBlock = newBlock;
